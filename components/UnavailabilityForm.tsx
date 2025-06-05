@@ -36,14 +36,14 @@ export default function UnavailabilityForm({
 
   // Generate preview when person is selected
   useEffect(() => {
-    if (selectedPerson && selectedDates.length > 0 && schedule) {
+    if (selectedPerson && selectedDates.length > 0 && schedule && config) {
       try {
         const request: UnavailabilityRequest = {
           personId: selectedPerson,
           dates: selectedDates,
         };
 
-        const { adjustment } = algorithm.processUnavailabilityRequest(schedule, request);
+        const { adjustment } = algorithm.processUnavailabilityRequest(schedule, request, config);
         setPreviewData(adjustment);
       } catch (error) {
         console.error('Error generating preview:', error);
@@ -52,7 +52,7 @@ export default function UnavailabilityForm({
     } else {
       setPreviewData(null);
     }
-  }, [selectedPerson, selectedDates, schedule]);
+  }, [selectedPerson, selectedDates, schedule, config]);
 
   const handleSubmit = async () => {
     if (!selectedPerson || selectedDates.length === 0) return;

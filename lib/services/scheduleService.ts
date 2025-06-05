@@ -87,60 +87,60 @@ export class ScheduleService {
   }
 
   /**
-   * Process unavailability request and update schedule
+   * Mark dates as unavailable for a specific person
    */
-  async markUnavailable(request: UnavailabilityRequest): Promise<{
-    success: boolean;
-    message: string;
-    handoffCount?: number;
-  }> {
+  async markUnavailable(
+    personId: 'personA' | 'personB',
+    dates: string[]
+  ): Promise<{ success: boolean; message: string; handoffCount?: number }> {
     try {
-      const currentSchedule = await this.getCurrentSchedule();
-      if (!currentSchedule) {
-        return { success: false, message: 'No schedule found. Please initialize the app first.' };
+      const [schedule, config] = await Promise.all([
+        this.storage.loadSchedule(),
+        this.storage.loadConfig()
+      ]);
+
+      if (!schedule || !config) {
+        throw new Error('Schedule or configuration not found. Please set up the application first.');
       }
 
-      // Validate that dates are in the future
-      const today = new Date().toISOString().split('T')[0];
-      const invalidDates = request.dates.filter(date => date <= today);
-      if (invalidDates.length > 0) {
-        return { 
-          success: false, 
-          message: `Cannot mark past dates as unavailable: ${invalidDates.join(', ')}` 
-        };
-      }
+      const request: UnavailabilityRequest = {
+        personId,
+        dates,
+        reason: 'User marked unavailable',
+      };
 
-      // Process the unavailability request
       const { adjustedSchedule, adjustment } = this.algorithm.processUnavailabilityRequest(
-        currentSchedule,
-        request
+        schedule, 
+        request,
+        config
       );
 
-      if (!adjustment.isValid && adjustment.conflictDates.length > 0) {
-        return {
-          success: false,
-          message: adjustment.reason || 'Unable to adjust schedule while respecting constraints',
-        };
-      }
-
-      // Update the schedule
       await this.storage.saveSchedule(adjustedSchedule);
 
-      const resultMessage = adjustment.conflictDates.length > 0
-        ? `Schedule adjusted successfully. ${adjustment.conflictDates.length} conflict(s) resolved.`
-        : 'Unavailability marked successfully. No schedule conflicts.';
+      const personName = personId === 'personA' ? config.personA.name : config.personB.name;
+      const datesStr = dates.length === 1 ? dates[0] : `${dates.length} dates`;
+      
+      if (adjustment.conflictDates.length > 0) {
+        const warningMessage = adjustment.warnings 
+          ? ` Note: ${adjustment.warnings.join('; ')}`
+          : '';
+        return {
+          success: true,
+          message: `${personName} marked unavailable for ${datesStr}. Schedule adjusted with ${adjustment.handoffCount} handoff${adjustment.handoffCount !== 1 ? 's' : ''}.${warningMessage}`,
+          handoffCount: adjustment.handoffCount,
+        };
+      }
 
       return {
         success: true,
-        message: resultMessage,
-        handoffCount: adjustment.handoffCount,
+        message: `${personName} marked unavailable for ${datesStr}. No schedule conflicts.`,
+        handoffCount: 0,
       };
-
     } catch (error) {
-      console.error('Error processing unavailability:', error);
+      console.error('Error marking unavailable:', error);
       return {
         success: false,
-        message: 'An error occurred while updating the schedule.',
+        message: error instanceof Error ? error.message : 'Failed to mark dates as unavailable',
       };
     }
   }

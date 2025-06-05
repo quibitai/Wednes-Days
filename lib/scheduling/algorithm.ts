@@ -70,7 +70,8 @@ export class CustodySchedulingAlgorithm {
    */
   processUnavailabilityRequest(
     schedule: CustodySchedule,
-    request: UnavailabilityRequest
+    request: UnavailabilityRequest,
+    config?: { personA: { name: string }; personB: { name: string } }
   ): { adjustedSchedule: CustodySchedule; adjustment: ScheduleAdjustment } {
     // Mark unavailable dates
     const updatedEntries = { ...schedule.entries };
@@ -104,7 +105,7 @@ export class CustodySchedulingAlgorithm {
     }
 
     // Attempt to resolve conflicts
-    const adjustment = this.resolveScheduleConflicts(updatedEntries, conflictDates);
+    const adjustment = this.resolveScheduleConflicts(updatedEntries, conflictDates, config);
     
     if (adjustment.isValid) {
       // Apply the proposed changes
@@ -177,7 +178,8 @@ export class CustodySchedulingAlgorithm {
    */
   private resolveScheduleConflicts(
     entries: Record<string, ScheduleEntry>,
-    conflictDates: string[]
+    conflictDates: string[],
+    config?: { personA: { name: string }; personB: { name: string } }
   ): ScheduleAdjustment {
     const originalAssignments: Record<string, 'personA' | 'personB'> = {};
     conflictDates.forEach(date => {
@@ -185,25 +187,25 @@ export class CustodySchedulingAlgorithm {
     });
 
     // Strategy 1: Try early handoff (end period before unavailable day)
-    const earlyHandoffSolution = this.tryEarlyHandoffStrategy(entries, conflictDates);
+    const earlyHandoffSolution = this.tryEarlyHandoffStrategy(entries, conflictDates, config);
     if (earlyHandoffSolution.isValid) {
       return earlyHandoffSolution;
     }
 
     // Strategy 2: Try extension (other person takes over through conflict)
-    const extensionSolution = this.tryExtensionStrategy(entries, conflictDates);
+    const extensionSolution = this.tryExtensionStrategy(entries, conflictDates, config);
     if (extensionSolution.isValid) {
       return extensionSolution;
     }
 
     // Strategy 3: Try period shifting
-    const shiftSolution = this.tryPeriodShiftStrategy(entries, conflictDates);
+    const shiftSolution = this.tryPeriodShiftStrategy(entries, conflictDates, config);
     if (shiftSolution.isValid) {
       return shiftSolution;
     }
 
     // Strategy 4: Force assignment with warnings (allow 4-day rule violations)
-    const forcedSolution = this.tryForcedAssignment(entries, conflictDates);
+    const forcedSolution = this.tryForcedAssignment(entries, conflictDates, config);
     return forcedSolution;
   }
 
@@ -213,7 +215,8 @@ export class CustodySchedulingAlgorithm {
    */
   private tryEarlyHandoffStrategy(
     entries: Record<string, ScheduleEntry>,
-    conflictDates: string[]
+    conflictDates: string[],
+    config?: { personA: { name: string }; personB: { name: string } }
   ): ScheduleAdjustment {
     const proposedAssignments: Record<string, 'personA' | 'personB'> = {};
     
@@ -259,7 +262,8 @@ export class CustodySchedulingAlgorithm {
    */
   private tryExtensionStrategy(
     entries: Record<string, ScheduleEntry>,
-    conflictDates: string[]
+    conflictDates: string[],
+    config?: { personA: { name: string }; personB: { name: string } }
   ): ScheduleAdjustment {
     const proposedAssignments: Record<string, 'personA' | 'personB'> = {};
     
@@ -306,7 +310,8 @@ export class CustodySchedulingAlgorithm {
    */
   private tryPeriodShiftStrategy(
     entries: Record<string, ScheduleEntry>,
-    conflictDates: string[]
+    conflictDates: string[],
+    config?: { personA: { name: string }; personB: { name: string } }
   ): ScheduleAdjustment {
     // This is a more complex strategy that analyzes custody periods
     // and shifts their boundaries to avoid conflicts
@@ -320,7 +325,7 @@ export class CustodySchedulingAlgorithm {
     }
 
     // Validate the proposed solution
-    const validation = this.validateScheduleSegment(entries, proposedAssignments, conflictDates);
+    const validation = this.validateScheduleSegment(entries, proposedAssignments, conflictDates, config);
     
     if (!validation.isValid) {
       return {
@@ -352,7 +357,8 @@ export class CustodySchedulingAlgorithm {
    */
   private tryForcedAssignment(
     entries: Record<string, ScheduleEntry>,
-    conflictDates: string[]
+    conflictDates: string[],
+    config?: { personA: { name: string }; personB: { name: string } }
   ): ScheduleAdjustment {
     const proposedAssignments: Record<string, 'personA' | 'personB'> = {};
     const warnings: string[] = [];
@@ -367,7 +373,10 @@ export class CustodySchedulingAlgorithm {
       
       // Check if this would violate the 4-day rule and add warnings
       if (this.wouldViolateMaxDays(entries, proposedAssignments, conflictDate, otherPerson)) {
-        warnings.push(`${otherPerson === 'personA' ? 'Person A' : 'Person B'} will exceed 4 consecutive days including ${conflictDate}`);
+        const personName = otherPerson === 'personA' 
+          ? (config?.personA?.name || 'Person A')
+          : (config?.personB?.name || 'Person B');
+        warnings.push(`${personName} will exceed 4 consecutive days including ${conflictDate}`);
       }
     }
 
@@ -435,7 +444,8 @@ export class CustodySchedulingAlgorithm {
   private validateScheduleSegment(
     entries: Record<string, ScheduleEntry>,
     proposedChanges: Record<string, 'personA' | 'personB'>,
-    datesToCheck: string[]
+    datesToCheck: string[],
+    config?: { personA: { name: string }; personB: { name: string } }
   ): ValidationResult {
     const violations: string[] = [];
 
@@ -444,7 +454,10 @@ export class CustodySchedulingAlgorithm {
       const assignment = proposedChanges[date] || entries[date].assignedTo;
       
       if (this.wouldViolateMaxDays(entries, proposedChanges, date, assignment)) {
-        violations.push(`${assignment} would exceed 4 consecutive days including ${date}`);
+        const personName = assignment === 'personA' 
+          ? (config?.personA?.name || 'Person A')
+          : (config?.personB?.name || 'Person B');
+        violations.push(`${personName} would exceed 4 consecutive days including ${date}`);
       }
     }
 

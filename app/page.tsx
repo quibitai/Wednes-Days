@@ -9,7 +9,7 @@ import SetupForm from '@/components/SetupForm';
 import UnavailabilityForm from '@/components/UnavailabilityForm';
 
 import { ScheduleService } from '@/lib/services/scheduleService';
-import type { CustodySchedule, AppConfig, UnavailabilityRequest } from '@/types';
+import type { CustodySchedule, AppConfig } from '@/types';
 
 const scheduleService = new ScheduleService();
 
@@ -105,12 +105,7 @@ export default function HomePage() {
   ) => {
     setIsSubmittingUnavailability(true);
     try {
-      const request: UnavailabilityRequest = {
-        personId,
-        dates,
-      };
-
-      const result = await scheduleService.markUnavailable(request);
+      const result = await scheduleService.markUnavailable(personId, dates);
       
       // Clear selected dates on success
       if (result.success) {
