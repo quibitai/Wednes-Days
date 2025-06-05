@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .calendar-day {
+    @apply relative min-h-[60px] border border-gray-200 p-2 cursor-pointer transition-colors;
+  }
+  
+  .calendar-day:hover {
+    @apply bg-gray-50;
+  }
+  
+  .calendar-day-person-a {
+    @apply bg-person-a-100 border-person-a-300;
+  }
+  
+  .calendar-day-person-a:hover {
+    @apply bg-person-a-200;
+  }
+  
+  .calendar-day-person-b {
+    @apply bg-person-b-100 border-person-b-300;
+  }
+  
+  .calendar-day-person-b:hover {
+    @apply bg-person-b-200;
+  }
+  
+  .calendar-day-unavailable {
+    @apply bg-unavailable-100 border-unavailable-300;
+  }
+  
+  .calendar-day-unavailable:hover {
+    @apply bg-unavailable-200;
+  }
+  
+  .calendar-day-adjusted {
+    @apply ring-2 ring-yellow-400 ring-opacity-75;
+  }
+} 
