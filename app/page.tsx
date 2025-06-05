@@ -79,16 +79,17 @@ export default function HomePage() {
         // If not initialized, auto-initialize with Jane and Adam
         if (!initialized) {
           console.log('Auto-initializing app with Jane and Adam...');
-          const today = new Date().toISOString().split('T')[0];
+          // Fixed start date to ensure consistent schedule for all visitors
+          const startDate = '2025-06-05'; // Adam starts Wednesday, June 5th
           
           await scheduleService.initializeApp({
             personAName: 'Adam',
             personBName: 'Jane', 
-            startDate: today,
+            startDate: startDate,
             initialPerson: 'personA' // Adam starts first
           });
           
-          console.log('App auto-initialized successfully');
+          console.log('App auto-initialized successfully with Adam starting June 5th');
         }
         
         setIsInitialized(true);
