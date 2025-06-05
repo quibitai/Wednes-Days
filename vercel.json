@@ -10,9 +10,6 @@
     }
   },
   "env": {
-    "KV_REST_API_URL": "@kv_rest_api_url",
-    "KV_REST_API_TOKEN": "@kv_rest_api_token", 
-    "KV_REST_API_READ_ONLY_TOKEN": "@kv_rest_api_read_only_token",
     "BLOB_READ_WRITE_TOKEN": "@blob_read_write_token",
     "NEXT_PUBLIC_FIREBASE_API_KEY": "@firebase_api_key",
     "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN": "@firebase_auth_domain", 
