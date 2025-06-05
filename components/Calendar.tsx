@@ -13,13 +13,13 @@ import {
   isAfter,
   parseISO
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Clock, User, X, Check, Trash2, Ban } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, User, X, Check, Trash2, Ban, Dog, AlertTriangle, Calendar as CalendarIcon } from 'lucide-react';
 import type { CustodySchedule, AppConfig, ScheduleEntry } from '@/types';
 
 interface CalendarProps {
   schedule: CustodySchedule | null;
   config: AppConfig | null;
-  onDateClick?: (date: string) => void;
+  onDateClick?: (date: string, event?: React.MouseEvent) => void;
   selectedDates?: string[];
   currentMonth: Date;
   onMonthChange: (date: Date) => void;
@@ -27,6 +27,89 @@ interface CalendarProps {
   isPreviewMode?: boolean;
   onRemoveUnavailability?: (date: string) => void;
 }
+
+const getConsecutiveDays = (
+  schedule: any,
+  date: string,
+  personId: 'personA' | 'personB'
+): { before: number; after: number; total: number } => {
+  if (!schedule?.entries) return { before: 0, after: 0, total: 1 };
+  
+  const entries = schedule.entries;
+  const currentDate = new Date(date);
+  let before = 0;
+  let after = 0;
+
+  // Count days before
+  let checkDate = new Date(currentDate);
+  checkDate.setDate(checkDate.getDate() - 1);
+  while (entries[checkDate.toISOString().split('T')[0]]?.assignedTo === personId) {
+    before++;
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  // Count days after
+  checkDate = new Date(currentDate);
+  checkDate.setDate(checkDate.getDate() + 1);
+  while (entries[checkDate.toISOString().split('T')[0]]?.assignedTo === personId) {
+    after++;
+    checkDate.setDate(checkDate.getDate() + 1);
+  }
+
+  return { before, after, total: before + 1 + after };
+};
+
+const DateTooltip = ({ 
+  entry, 
+  date, 
+  config, 
+  schedule, 
+  isSelected 
+}: { 
+  entry: any; 
+  date: string; 
+  config: any; 
+  schedule: any; 
+  isSelected: boolean;
+}) => {
+  if (!entry || !config) return null;
+
+  const person = entry.assignedTo === 'personA' ? config.personA : config.personB;
+  const consecutiveDays = getConsecutiveDays(schedule, date, entry.assignedTo);
+  const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
+  
+  return (
+    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-gray-900 text-white px-3 py-2 rounded-lg shadow-lg z-50 whitespace-nowrap text-sm pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <div className="flex items-center space-x-2 mb-1">
+        <Dog className="h-3 w-3" />
+        <span className="font-medium">{person.name}</span>
+        {isWeekend && <span className="text-xs bg-blue-600 px-1 rounded">Weekend</span>}
+      </div>
+      
+      <div className="text-xs text-gray-300">
+        <div>Period: Day {consecutiveDays.before + 1} of {consecutiveDays.total}</div>
+        {entry.isUnavailable && (
+          <div className="flex items-center space-x-1 text-red-300 mt-1">
+            <AlertTriangle className="h-3 w-3" />
+            <span>Marked unavailable</span>
+          </div>
+        )}
+        {entry.isAdjusted && (
+          <div className="flex items-center space-x-1 text-yellow-300 mt-1">
+            <Clock className="h-3 w-3" />
+            <span>Schedule adjusted</span>
+          </div>
+        )}
+        {isSelected && (
+          <div className="text-blue-300 mt-1">• Selected for unavailability</div>
+        )}
+      </div>
+      
+      {/* Tooltip arrow */}
+      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+    </div>
+  );
+};
 
 export default function Calendar({
   schedule,
@@ -144,7 +227,7 @@ export default function Calendar({
       <div
         key={dateStr}
         className={dayClasses.trim()}
-        onClick={() => isClickable && onDateClick(dateStr)}
+        onClick={(e) => isClickable && onDateClick(dateStr, e)}
         onContextMenu={(e) => handleRightClick(e, dateStr, entry)}
         onMouseEnter={() => setHoveredDate(dateStr)}
         onMouseLeave={() => setHoveredDate(null)}
@@ -220,6 +303,17 @@ export default function Calendar({
         {/* Hover effect for clickable dates */}
         {isClickable && (
           <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-5 transition-opacity duration-200 rounded" />
+        )}
+
+        {/* Enhanced Tooltip */}
+        {isCurrentMonth && !isPast && (
+          <DateTooltip 
+            entry={entry}
+            date={dateStr}
+            config={config}
+            schedule={schedule}
+            isSelected={isSelected}
+          />
         )}
       </div>
     );

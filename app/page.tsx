@@ -2,13 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { addMonths } from 'date-fns';
-import { Calendar as CalendarIcon, Plus, BarChart3, Database, X } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, BarChart3, Database, X, User, AlertCircle, Info, Check, ChevronDown, Smartphone } from 'lucide-react';
 
 import Calendar from '@/components/Calendar';
 import SetupForm from '@/components/SetupForm';
 import UnavailabilityForm from '@/components/UnavailabilityForm';
+import LoadingSkeleton from '@/components/LoadingSkeleton';
 
 import { ScheduleService } from '@/lib/services/scheduleService';
+import { StorageManager } from '@/lib/storage/storageManager';
 import type { CustodySchedule, AppConfig } from '@/types';
 
 const scheduleService = new ScheduleService();
@@ -26,6 +28,11 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmittingUnavailability, setIsSubmittingUnavailability] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{ primary: string; fallback?: string; isConfigured: boolean } | null>(null);
+  
+  // Range selection state
+  const [isRangeSelecting, setIsRangeSelecting] = useState(false);
+  const [rangeStart, setRangeStart] = useState<string | null>(null);
+  const [tempSelectedDates, setTempSelectedDates] = useState<string[]>([]);
 
   // Check if app is initialized and set up subscriptions
   useEffect(() => {
@@ -84,12 +91,58 @@ export default function HomePage() {
     }
   };
 
-  // Handle date selection for unavailability
-  const handleDateClick = (date: string) => {
-    if (selectedDates.includes(date)) {
-      setSelectedDates(prev => prev.filter(d => d !== date));
-    } else {
-      setSelectedDates(prev => [...prev, date].sort());
+  // Enhanced date click handler with range selection
+  const handleDateClick = (dateStr: string, event?: React.MouseEvent) => {
+    if (isInitialized && schedule) {
+      const isShiftClick = event?.shiftKey;
+      
+      if (isShiftClick && rangeStart && rangeStart !== dateStr) {
+        // Range selection
+        const startDate = new Date(rangeStart);
+        const endDate = new Date(dateStr);
+        const earlierDate = startDate <= endDate ? startDate : endDate;
+        const laterDate = startDate <= endDate ? endDate : startDate;
+        
+        const rangeDates: string[] = [];
+        const currentDate = new Date(earlierDate);
+        
+        while (currentDate <= laterDate) {
+          const dateString = currentDate.toISOString().split('T')[0];
+          // Only include future dates that aren't already assigned
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          if (currentDate >= today) {
+            rangeDates.push(dateString);
+          }
+          
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        // Add range to selection, removing duplicates
+        const newSelected = [...selectedDates];
+        rangeDates.forEach(date => {
+          if (!newSelected.includes(date)) {
+            newSelected.push(date);
+          }
+        });
+        
+        setSelectedDates(newSelected.sort());
+        setRangeStart(null);
+        setIsRangeSelecting(false);
+        
+      } else {
+        // Single date selection
+        if (selectedDates.includes(dateStr)) {
+          // Remove if already selected
+          setSelectedDates(selectedDates.filter(d => d !== dateStr));
+          setRangeStart(null);
+        } else {
+          // Add to selection
+          setSelectedDates([...selectedDates, dateStr].sort());
+          setRangeStart(dateStr); // Set as potential range start
+        }
+      }
     }
   };
 
@@ -152,38 +205,12 @@ export default function HomePage() {
     return scheduleService.getScheduleStats(schedule, 30);
   };
 
-  // Show setup form if not initialized
-  if (isInitialized === false) {
-    return (
-      <div>
-        <SetupForm onSetup={handleSetup} isLoading={isLoading} />
-        {/* Debug info */}
-        {storageInfo && (
-          <div className="fixed bottom-4 right-4 bg-gray-800 text-white px-3 py-2 rounded-lg text-xs flex items-center space-x-2">
-            <Database className="h-3 w-3" />
-            <span>Using: {storageInfo.primary} (Configured: {storageInfo.isConfigured ? 'Yes' : 'No'})</span>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // Show loading state while checking initialization
-  if (isInitialized === null) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-          {storageInfo && (
-            <p className="text-xs text-gray-500 mt-2">Storage: {storageInfo.primary} (Configured: {storageInfo.isConfigured ? 'Yes' : 'No'})</p>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   const stats = getScheduleStats();
+
+  // Show loading skeleton while initializing
+  if (!isInitialized || !schedule || !config) {
+    return <LoadingSkeleton />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -242,9 +269,11 @@ export default function HomePage() {
               <div className="flex items-start space-x-3">
                 <CalendarIcon className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-blue-800">
-                  <div className="font-medium mb-2">How to mark unavailable dates:</div>
-                  <div className="text-blue-700">
-                    Click on future dates to select them, then click "Mark as Unavailable"
+                  <div className="font-medium mb-2">📅 How to select dates:</div>
+                  <div className="space-y-1 text-blue-700">
+                    <div>• <strong>Single dates:</strong> Click on calendar days to select/deselect</div>
+                    <div>• <strong>Date ranges:</strong> Click first date, then Shift+click last date</div>
+                    <div>• <strong>Enhanced tooltips:</strong> Hover over calendar days for detailed info</div>
                   </div>
                 </div>
               </div>
@@ -289,7 +318,7 @@ export default function HomePage() {
                   {selectedDates.map(date => (
                     <button
                       key={date}
-                      onClick={() => handleDateClick(date)}
+                      onClick={(event) => handleDateClick(date, event)}
                       className="inline-flex items-center px-2 py-1 bg-yellow-200 text-yellow-800 rounded-md text-xs hover:bg-yellow-300 transition-colors"
                       title="Click to remove"
                     >
@@ -306,7 +335,7 @@ export default function HomePage() {
           <Calendar
             schedule={schedule}
             config={config}
-            onDateClick={handleDateClick}
+            onDateClick={(dateStr, event) => handleDateClick(dateStr, event)}
             selectedDates={selectedDates}
             currentMonth={currentMonth}
             onMonthChange={setCurrentMonth}
