@@ -166,6 +166,196 @@ export class StorageManager {
   }
 
   /**
+   * Switch day assignment to the other person
+   */
+  async switchDayAssignment(date: string): Promise<void> {
+    try {
+      const schedule = await this.loadSchedule();
+      if (!schedule) {
+        throw new Error('No schedule data found');
+      }
+
+      const entry = schedule.entries[date];
+      if (!entry) {
+        throw new Error(`No schedule entry found for ${date}`);
+      }
+
+      // Switch to the other person
+      const newAssignedTo: 'personA' | 'personB' = entry.assignedTo === 'personA' ? 'personB' : 'personA';
+      
+      const updatedEntry = {
+        ...entry,
+        assignedTo: newAssignedTo,
+        isAdjusted: true,
+        originalAssignedTo: entry.originalAssignedTo || entry.assignedTo,
+      };
+
+      const updatedSchedule = {
+        ...schedule,
+        entries: {
+          ...schedule.entries,
+          [date]: updatedEntry,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      await this.saveSchedule(updatedSchedule);
+    } catch (error) {
+      console.warn(`Primary storage (${this.adapter.name}) failed, trying fallback:`, error);
+      if (this.fallbackAdapter) {
+        // Retry with fallback adapter
+        await this.switchDayAssignment(date);
+        this.switchToFallback();
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Toggle informational unavailability for a person on a specific date
+   */
+  async toggleInformationalUnavailability(date: string, personId: 'personA' | 'personB'): Promise<void> {
+    try {
+      const schedule = await this.loadSchedule();
+      if (!schedule) {
+        throw new Error('No schedule data found');
+      }
+
+      // Get or create entry for this date
+      let entry = schedule.entries[date];
+      if (!entry) {
+        // Create a default entry if none exists - use proper ScheduleEntry type
+        entry = {
+          date,
+          assignedTo: 'personA',
+        };
+      }
+
+      // Toggle informational unavailability
+      const currentUnavailability = entry.informationalUnavailability || {};
+      const isCurrentlyUnavailable = currentUnavailability[personId] || false;
+      
+      const updatedEntry = {
+        ...entry,
+        informationalUnavailability: {
+          ...currentUnavailability,
+          [personId]: !isCurrentlyUnavailable,
+        },
+      };
+
+      const updatedSchedule = {
+        ...schedule,
+        entries: {
+          ...schedule.entries,
+          [date]: updatedEntry,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      await this.saveSchedule(updatedSchedule);
+    } catch (error) {
+      console.warn(`Primary storage (${this.adapter.name}) failed, trying fallback:`, error);
+      if (this.fallbackAdapter) {
+        // Retry with fallback adapter
+        await this.toggleInformationalUnavailability(date, personId);
+        this.switchToFallback();
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Save or update a note for a specific date
+   */
+  async saveNote(date: string, note: string): Promise<void> {
+    try {
+      const schedule = await this.loadSchedule();
+      if (!schedule) {
+        throw new Error('No schedule data found');
+      }
+
+      // Get or create entry for this date
+      let entry = schedule.entries[date];
+      if (!entry) {
+        // Create a default entry if none exists
+        entry = {
+          date,
+          assignedTo: 'personA',
+        };
+      }
+
+      const updatedEntry = {
+        ...entry,
+        note: note.trim(),
+      };
+
+      const updatedSchedule = {
+        ...schedule,
+        entries: {
+          ...schedule.entries,
+          [date]: updatedEntry,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      await this.saveSchedule(updatedSchedule);
+    } catch (error) {
+      console.warn(`Primary storage (${this.adapter.name}) failed, trying fallback:`, error);
+      if (this.fallbackAdapter) {
+        // Retry with fallback adapter
+        await this.saveNote(date, note);
+        this.switchToFallback();
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Delete a note for a specific date
+   */
+  async deleteNote(date: string): Promise<void> {
+    try {
+      const schedule = await this.loadSchedule();
+      if (!schedule) {
+        throw new Error('No schedule data found');
+      }
+
+      const entry = schedule.entries[date];
+      if (!entry) {
+        return; // No entry to delete note from
+      }
+
+      const updatedEntry = {
+        ...entry,
+      };
+      delete updatedEntry.note;
+
+      const updatedSchedule = {
+        ...schedule,
+        entries: {
+          ...schedule.entries,
+          [date]: updatedEntry,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      await this.saveSchedule(updatedSchedule);
+    } catch (error) {
+      console.warn(`Primary storage (${this.adapter.name}) failed, trying fallback:`, error);
+      if (this.fallbackAdapter) {
+        // Retry with fallback adapter
+        await this.deleteNote(date);
+        this.switchToFallback();
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
    * Select the best available storage adapters based on environment
    */
   private selectAdapters(preferredBackend?: StorageBackend): { 

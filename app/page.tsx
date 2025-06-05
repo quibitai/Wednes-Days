@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { addMonths } from 'date-fns';
-import { Calendar as CalendarIcon, Plus, BarChart3, Database, X, User, AlertCircle, Info, Check, ChevronDown, Smartphone } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, BarChart3, Database, X, User, AlertCircle, Info, Check, ChevronDown, Smartphone, TrendingUp, Clock, Users } from 'lucide-react';
 
 import Calendar from '@/components/Calendar';
 import SetupForm from '@/components/SetupForm';
 import UnavailabilityForm from '@/components/UnavailabilityForm';
+import DayDetailModal from '@/components/DayDetailModal';
 import LoadingSkeleton from '@/components/LoadingSkeleton';
 
 import { ScheduleService } from '@/lib/services/scheduleService';
@@ -14,6 +15,7 @@ import { StorageManager } from '@/lib/storage/storageManager';
 import type { CustodySchedule, AppConfig } from '@/types';
 
 const scheduleService = new ScheduleService();
+const storageManager = new StorageManager();
 
 export default function HomePage() {
   // App state
@@ -23,19 +25,18 @@ export default function HomePage() {
   
   // UI state
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [showUnavailabilityForm, setShowUnavailabilityForm] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmittingUnavailability, setIsSubmittingUnavailability] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{ primary: string; fallback?: string; isConfigured: boolean } | null>(null);
   
-  // Range selection state
-  const [isRangeSelecting, setIsRangeSelecting] = useState(false);
-  const [rangeStart, setRangeStart] = useState<string | null>(null);
-  const [tempSelectedDates, setTempSelectedDates] = useState<string[]>([]);
+  // Current user - for now we'll use personA as default, but this could be made dynamic
+  const [currentUser] = useState<'personA' | 'personB'>('personA');
   
   // Help section state
   const [isHelpExpanded, setIsHelpExpanded] = useState(false);
+  const [isStatsExpanded, setIsStatsExpanded] = useState(false);
 
   // Check if app is initialized and set up subscriptions
   useEffect(() => {
@@ -94,90 +95,90 @@ export default function HomePage() {
     }
   };
 
-  // Enhanced date click handler with range selection
-  const handleDateClick = (dateStr: string, event?: React.MouseEvent) => {
-    if (isInitialized && schedule) {
-      const isShiftClick = event?.shiftKey;
-      
-      if (isShiftClick && rangeStart && rangeStart !== dateStr) {
-        // Range selection
-        const startDate = new Date(rangeStart);
-        const endDate = new Date(dateStr);
-        const earlierDate = startDate <= endDate ? startDate : endDate;
-        const laterDate = startDate <= endDate ? endDate : startDate;
-        
-        const rangeDates: string[] = [];
-        const currentDate = new Date(earlierDate);
-        
-        while (currentDate <= laterDate) {
-          const dateString = currentDate.toISOString().split('T')[0];
-          // Only include future dates that aren't already assigned
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          
-          if (currentDate >= today) {
-            rangeDates.push(dateString);
-          }
-          
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
-        
-        // Add range to selection, removing duplicates
-        const newSelected = [...selectedDates];
-        rangeDates.forEach(date => {
-          if (!newSelected.includes(date)) {
-            newSelected.push(date);
-          }
-        });
-        
-        setSelectedDates(newSelected.sort());
-        setRangeStart(null);
-        setIsRangeSelecting(false);
-        
-      } else {
-        // Single date selection
-        if (selectedDates.includes(dateStr)) {
-          // Remove if already selected
-          setSelectedDates(selectedDates.filter(d => d !== dateStr));
-          setRangeStart(null);
-        } else {
-          // Add to selection
-          setSelectedDates([...selectedDates, dateStr].sort());
-          setRangeStart(dateStr); // Set as potential range start
-        }
-      }
-    }
+  // Handle date click to open modal
+  const handleDateClick = (date: string) => {
+    setSelectedDate(date);
   };
 
-  // Clear selected dates
-  const handleClearSelection = () => {
-    setSelectedDates([]);
+  // Close modal
+  const handleCloseModal = () => {
+    setSelectedDate(null);
   };
 
   // Handle unavailability submission
-  const handleUnavailabilitySubmit = async (
-    personId: 'personA' | 'personB',
-    dates: string[]
-  ) => {
+  const handleUnavailabilitySubmit = async (personId: 'personA' | 'personB', dates: string[]) => {
     setIsSubmittingUnavailability(true);
+    
     try {
       const result = await scheduleService.markUnavailable(personId, dates);
       
       // Clear selected dates on success
       if (result.success) {
-        setSelectedDates([]);
         setShowUnavailabilityForm(false);
       }
-
+      
       return result;
     } catch (error) {
-      console.error('Error marking unavailable:', error);
+      console.error('Error submitting unavailability:', error);
       return {
         success: false,
-        message: 'An error occurred while processing your request',
+        message: 'Failed to submit unavailability request',
+        handoffCount: 0,
       };
     } finally {
       setIsSubmittingUnavailability(false);
+    }
+  };
+
+  // Handle day assignment switch
+  const handleSwitchDay = async (date: string) => {
+    try {
+      setIsLoading(true);
+      await storageManager.switchDayAssignment(date);
+      // The subscription will automatically update the schedule
+    } catch (error) {
+      console.error('Error switching day assignment:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle informational unavailability toggle
+  const handleToggleInformationalUnavailability = async (date: string, personId: 'personA' | 'personB') => {
+    try {
+      setIsLoading(true);
+      await storageManager.toggleInformationalUnavailability(date, personId);
+      // The subscription will automatically update the schedule
+    } catch (error) {
+      console.error('Error toggling informational unavailability:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle note save
+  const handleSaveNote = async (date: string, note: string) => {
+    try {
+      setIsLoading(true);
+      await storageManager.saveNote(date, note);
+      // The subscription will automatically update the schedule
+    } catch (error) {
+      console.error('Error saving note:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle note delete
+  const handleDeleteNote = async (date: string) => {
+    try {
+      setIsLoading(true);
+      await storageManager.deleteNote(date);
+      // The subscription will automatically update the schedule
+    } catch (error) {
+      console.error('Error deleting note:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -198,17 +199,65 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error('Error removing unavailability:', error);
-      alert('An error occurred while removing unavailability');
     }
   };
 
-  // Get schedule statistics
   const getScheduleStats = () => {
     if (!schedule) return null;
     return scheduleService.getScheduleStats(schedule, 30);
   };
 
+  const getMonthlyStats = () => {
+    if (!schedule || !config) return null;
+    
+    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    
+    let personADays = 0;
+    let personBDays = 0;
+    let totalDays = 0;
+    
+    let currentDate = new Date(monthStart);
+    while (currentDate <= monthEnd) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const entry = schedule.entries[dateStr];
+      
+      if (entry?.assignedTo) {
+        totalDays++;
+        if (entry.assignedTo === 'personA') {
+          personADays++;
+        } else if (entry.assignedTo === 'personB') {
+          personBDays++;
+        }
+      }
+      
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return {
+      personA: personADays,
+      personB: personBDays,
+      totalDays
+    };
+  };
+
+  // Get the entry for the selected date
+  const selectedEntry = selectedDate && schedule ? schedule.entries[selectedDate] : null;
+
+  // Get stats for display
   const stats = getScheduleStats();
+  const monthlyStats = getMonthlyStats();
+
+  // If not initialized, show setup form
+  if (isInitialized === false) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="max-w-md w-full">
+          <SetupForm onSetup={handleSetup} isLoading={isLoading} />
+        </div>
+      </div>
+    );
+  }
 
   // Show loading skeleton while initializing
   if (!isInitialized || !schedule || !config) {
@@ -225,39 +274,42 @@ export default function HomePage() {
               <CalendarIcon className="h-8 w-8 text-blue-600" />
               <div>
                 <h1 className="text-xl font-bold text-gray-900">
-                  Dog Custody Scheduler
+                  Wednes' Days
                 </h1>
-                {config && (
-                  <p className="text-sm text-gray-500">
-                    {config.personA.name} & {config.personB.name}
-                  </p>
-                )}
               </div>
             </div>
 
             <div className="flex items-center space-x-4">
-              {/* Stats */}
-              {stats && (
-                <div className="hidden sm:flex items-center space-x-6 text-sm text-gray-600">
-                  <div className="flex items-center space-x-1">
-                    <BarChart3 className="h-4 w-4" />
-                    <span>{stats.totalHandoffs} handoffs</span>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Next 30 days
-                  </div>
-                </div>
-              )}
-
-              {/* Selection indicator */}
-              {selectedDates.length > 0 && (
-                <div className="flex items-center space-x-2 bg-yellow-100 px-3 py-2 rounded-lg">
-                  <CalendarIcon className="h-4 w-4 text-yellow-600" />
-                  <span className="text-sm font-medium text-yellow-800">
-                    {selectedDates.length} selected
-                  </span>
-                </div>
-              )}
+              {/* Help Icon with Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsHelpExpanded(!isHelpExpanded)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                  title="How to use this app"
+                >
+                  <Info className="h-5 w-5" />
+                </button>
+                
+                {isHelpExpanded && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setIsHelpExpanded(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-2 w-80 bg-white border shadow-lg rounded-lg z-50 p-4">
+                      <h3 className="font-medium text-gray-900 mb-3">Quick Guide</h3>
+                      <div className="space-y-2 text-sm text-gray-600">
+                        <div>• <strong>Click any day:</strong> Opens detailed options</div>
+                        <div>• <strong>Switch button:</strong> Changes custody assignment</div>
+                        <div>• <strong>Ban icon:</strong> Mark unavailable (informational)</div>
+                        <div>• <strong>Note icon:</strong> Add personal reminders</div>
+                        <div>• <strong>Split colors:</strong> Handoff days (custody changes)</div>
+                        <div>• <strong>Info icon:</strong> Shows day details on hover</div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -266,179 +318,143 @@ export default function HomePage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
-          {/* Selected dates info */}
-          {selectedDates.length > 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <CalendarIcon className="h-5 w-5 text-yellow-600" />
-                  <div className="text-sm text-yellow-800">
-                    <span className="font-medium">
-                      {selectedDates.length} date{selectedDates.length !== 1 ? 's' : ''} selected
-                    </span>
-                    <div className="text-xs text-yellow-700 mt-1">
-                      Click calendar dates to add/remove • Click "Preview Changes" to see the impact
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setShowUnavailabilityForm(true)}
-                    className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 text-sm font-medium transition-colors"
-                  >
-                    Mark as Unavailable
-                  </button>
-                  <button
-                    onClick={handleClearSelection}
-                    className="text-yellow-600 hover:text-yellow-800 text-sm font-medium px-3 py-2 rounded-lg hover:bg-yellow-100 transition-colors"
-                  >
-                    Clear All
-                  </button>
-                </div>
-              </div>
-              
-              {/* Show selected dates */}
-              <div className="mt-3 pt-3 border-t border-yellow-200">
-                <div className="text-xs text-yellow-700 mb-2">Selected dates:</div>
-                <div className="flex flex-wrap gap-2">
-                  {selectedDates.map(date => (
-                    <button
-                      key={date}
-                      onClick={(event) => handleDateClick(date, event)}
-                      className="inline-flex items-center px-2 py-1 bg-yellow-200 text-yellow-800 rounded-md text-xs hover:bg-yellow-300 transition-colors"
-                      title="Click to remove"
-                    >
-                      {new Date(date).toLocaleDateString()}
-                      <X className="h-3 w-3 ml-1" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Calendar */}
           <Calendar
             schedule={schedule}
             config={config}
-            onDateClick={(dateStr, event) => handleDateClick(dateStr, event)}
-            selectedDates={selectedDates}
+            onDateClick={handleDateClick}
+            selectedDates={[]}
             currentMonth={currentMonth}
             onMonthChange={setCurrentMonth}
             onRemoveUnavailability={handleRemoveUnavailability}
+            onMarkUnavailable={() => setShowUnavailabilityForm(true)}
+            currentUser={currentUser}
+            onSwitchDay={handleSwitchDay}
+            onToggleInformationalUnavailability={handleToggleInformationalUnavailability}
           />
 
-          {/* Stats Panel */}
-          {stats && (
+          {/* Monthly Distribution */}
+          {monthlyStats && (
             <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Schedule Statistics (Next 30 Days)
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">
-                    {stats.totalHandoffs}
+              {/* Monthly Distribution with Visual Charts */}
+              <div className="mb-6">
+                <h4 className="text-md font-medium text-gray-700 mb-4">
+                  {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} Distribution
+                </h4>
+                
+                {/* Single stacked progress bar */}
+                <div className="space-y-3">
+                  {/* Labels and counts */}
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-medium text-gray-700">{config.personA.name}</span>
+                      <span className="text-gray-600">{monthlyStats.personA} days</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-medium text-gray-700">{config.personB.name}</span>
+                      <span className="text-gray-600">{monthlyStats.personB} days</span>
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-500">Total Handoffs</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">
-                    {stats.averagePeriodLength.toFixed(1)}
+                  
+                  {/* Stacked progress bar */}
+                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div className="h-full flex">
+                      <div 
+                        className="bg-blue-500 h-full transition-all duration-300" 
+                        style={{ width: `${monthlyStats.totalDays > 0 ? (monthlyStats.personA / monthlyStats.totalDays) * 100 : 0}%` }}
+                      ></div>
+                      <div 
+                        className="bg-orange-500 h-full transition-all duration-300" 
+                        style={{ width: `${monthlyStats.totalDays > 0 ? (monthlyStats.personB / monthlyStats.totalDays) * 100 : 0}%` }}
+                      ></div>
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-500">Avg Period Length</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">
-                    {stats.periods.length}
+                  
+                  {/* Total days below the bar */}
+                  <div className="text-center">
+                    <span className="text-gray-500 text-sm">Total: {monthlyStats.totalDays} days</span>
                   </div>
-                  <div className="text-sm text-gray-500">Custody Periods</div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
 
-        {/* Collapsible Help Section */}
-        <div className="mt-8 bg-white rounded-lg shadow-sm border overflow-hidden">
-          <button
-            onClick={() => setIsHelpExpanded(!isHelpExpanded)}
-            className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-center space-x-3">
-              <Info className="h-5 w-5 text-blue-600" />
-              <span className="font-medium text-gray-900">How to Use This App</span>
-            </div>
-            <ChevronDown className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${
-              isHelpExpanded ? 'transform rotate-180' : ''
-            }`} />
-          </button>
-          
-          {isHelpExpanded && (
-            <div className="border-t bg-blue-50 p-6">
-              <div className="grid md:grid-cols-2 gap-6">
-                <div>
-                  <h4 className="font-medium text-blue-900 mb-3 flex items-center">
-                    <CalendarIcon className="h-4 w-4 mr-2" />
-                    📅 Selecting Dates
-                  </h4>
-                  <div className="space-y-2 text-sm text-blue-800">
-                    <div>• <strong>Single dates:</strong> Click on calendar days to select/deselect</div>
-                    <div>• <strong>Date ranges:</strong> Click first date, then Shift+click last date</div>
-                    <div>• <strong>Remove dates:</strong> Click selected date chips or click dates again</div>
-                  </div>
+              {/* Collapsible 30-Day Statistics */}
+              {stats && (
+                <div className="border-t pt-6">
+                  <button
+                    onClick={() => setIsStatsExpanded(!isStatsExpanded)}
+                    className="w-full flex items-center justify-between text-left hover:bg-gray-50 transition-colors p-2 rounded-lg"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                      <span className="font-medium text-gray-700">Next 30 Days Summary</span>
+                    </div>
+                    <ChevronDown className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${
+                      isStatsExpanded ? 'transform rotate-180' : ''
+                    }`} />
+                  </button>
+                  
+                  {isStatsExpanded && (
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                      <div className="text-center p-4 bg-blue-50 rounded-lg">
+                        <div className="flex items-center justify-center mb-2">
+                          <Users className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div className="text-2xl font-bold text-blue-900">
+                          {stats.totalHandoffs}
+                        </div>
+                        <div className="text-sm text-blue-600">Total Handoffs</div>
+                      </div>
+                      <div className="text-center p-4 bg-green-50 rounded-lg">
+                        <div className="flex items-center justify-center mb-2">
+                          <Clock className="h-5 w-5 text-green-600" />
+                        </div>
+                        <div className="text-2xl font-bold text-green-900">
+                          {stats.averagePeriodLength.toFixed(1)}
+                        </div>
+                        <div className="text-sm text-green-600">Avg Period Length</div>
+                      </div>
+                      <div className="text-center p-4 bg-purple-50 rounded-lg">
+                        <div className="flex items-center justify-center mb-2">
+                          <BarChart3 className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div className="text-2xl font-bold text-purple-900">
+                          {stats.periods.length}
+                        </div>
+                        <div className="text-sm text-purple-600">Custody Periods</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                
-                <div>
-                  <h4 className="font-medium text-blue-900 mb-3 flex items-center">
-                    <Smartphone className="h-4 w-4 mr-2" />
-                    💡 Features & Tips
-                  </h4>
-                  <div className="space-y-2 text-sm text-blue-800">
-                    <div>• <strong>Enhanced tooltips:</strong> Hover over calendar days for detailed info</div>
-                    <div>• <strong>Quick actions:</strong> Right-click unavailable dates for options</div>
-                    <div>• <strong>Rule warnings:</strong> System shows warnings when 4-day rule would be violated</div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium text-blue-900 mb-3 flex items-center">
-                    <User className="h-4 w-4 mr-2" />
-                    🚫 Marking Unavailable
-                  </h4>
-                  <div className="space-y-2 text-sm text-blue-800">
-                    <div>• Select dates when someone can't have overnight care</div>
-                    <div>• Choose which person is unavailable</div>
-                    <div>• Review impact before confirming changes</div>
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium text-blue-900 mb-3 flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    ⚠️ Understanding Warnings
-                  </h4>
-                  <div className="space-y-2 text-sm text-blue-800">
-                    <div>• System tries to keep periods under 4 days</div>
-                    <div>• Warnings show when rules would be broken</div>
-                    <div>• You can still proceed if necessary</div>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           )}
         </div>
       </main>
 
+      {/* Day Detail Modal */}
+      {selectedDate && (
+        <DayDetailModal
+          date={selectedDate}
+          entry={selectedEntry}
+          config={config}
+          currentUser={currentUser}
+          onClose={handleCloseModal}
+          onSwitchDay={handleSwitchDay}
+          onToggleInformationalUnavailability={handleToggleInformationalUnavailability}
+          onSaveNote={handleSaveNote}
+          onDeleteNote={handleDeleteNote}
+        />
+      )}
+
       {/* Unavailability Form Modal */}
       {showUnavailabilityForm && (
         <UnavailabilityForm
           config={config}
-          selectedDates={selectedDates}
+          selectedDates={[]}
           schedule={schedule}
           onClose={() => setShowUnavailabilityForm(false)}
           onSubmit={handleUnavailabilitySubmit}
           isSubmitting={isSubmittingUnavailability}
-          onClearSelection={handleClearSelection}
         />
       )}
 

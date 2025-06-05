@@ -16,7 +16,6 @@ interface UnavailabilityFormProps {
     handoffCount?: number;
   }>;
   isSubmitting: boolean;
-  onClearSelection: () => void;
 }
 
 export default function UnavailabilityForm({
@@ -26,7 +25,6 @@ export default function UnavailabilityForm({
   onClose,
   onSubmit,
   isSubmitting,
-  onClearSelection,
 }: UnavailabilityFormProps) {
   const [selectedPerson, setSelectedPerson] = useState<'personA' | 'personB' | ''>('');
   const [previewData, setPreviewData] = useState<ScheduleAdjustment | null>(null);
@@ -141,12 +139,6 @@ export default function UnavailabilityForm({
                     <Calendar className="h-5 w-5 text-red-600" />
                     <span className="font-medium text-gray-900">Selected Dates</span>
                   </div>
-                  <button
-                    onClick={onClearSelection}
-                    className="text-sm text-red-600 hover:text-red-800 font-medium px-3 py-1 rounded-lg hover:bg-red-50 transition-colors"
-                  >
-                    Clear Selection
-                  </button>
                 </div>
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-red-800 text-sm font-medium">

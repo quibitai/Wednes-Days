@@ -11,10 +11,17 @@ export interface User {
 export interface ScheduleEntry {
   date: string; // ISO date string (YYYY-MM-DD)
   assignedTo: 'personA' | 'personB';
-  isUnavailable?: boolean;
-  unavailableBy?: 'personA' | 'personB';
+  isUnavailable?: boolean; // Schedule-affecting unavailability (legacy, for existing data)
+  unavailableBy?: 'personA' | 'personB'; // Schedule-affecting unavailability (legacy, for existing data)
   isAdjusted?: boolean; // Indicates if this day was modified by the algorithm
   originalAssignedTo?: 'personA' | 'personB'; // Original assignment before adjustment
+  // New: Informational unavailability (doesn't affect schedule)
+  informationalUnavailability?: {
+    personA?: boolean; // Person A marked themselves unavailable (informational only)
+    personB?: boolean; // Person B marked themselves unavailable (informational only)
+  };
+  // Notes for the day
+  note?: string; // User-added note for this day
 }
 
 export interface CustodySchedule {
