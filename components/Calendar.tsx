@@ -37,9 +37,8 @@ const getConsecutiveDays = (
   
   const entries = schedule.entries;
   
-  // Fix timezone issues by parsing the date string correctly
-  const [year, month, day] = date.split('-').map(Number);
-  const currentDate = new Date(year, month - 1, day);
+  // Use parseISO for consistent date parsing with the rest of the calendar
+  const currentDate = parseISO(date);
   let before = 0;
   let after = 0;
 
@@ -80,9 +79,8 @@ const DateTooltip = ({
   const person = entry.assignedTo === 'personA' ? config.personA : config.personB;
   const consecutiveDays = getConsecutiveDays(schedule, date, entry.assignedTo);
   
-  // Fix timezone issues by parsing the date string correctly
-  const [year, month, day] = date.split('-').map(Number);
-  const dateObj = new Date(year, month - 1, day); // month is 0-indexed
+  // Use parseISO for consistent date parsing with the rest of the calendar
+  const dateObj = parseISO(date);
   const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6; // Sunday = 0, Saturday = 6
   
   return (

@@ -33,6 +33,9 @@ export default function HomePage() {
   const [isRangeSelecting, setIsRangeSelecting] = useState(false);
   const [rangeStart, setRangeStart] = useState<string | null>(null);
   const [tempSelectedDates, setTempSelectedDates] = useState<string[]>([]);
+  
+  // Help section state
+  const [isHelpExpanded, setIsHelpExpanded] = useState(false);
 
   // Check if app is initialized and set up subscriptions
   useEffect(() => {
@@ -263,23 +266,6 @@ export default function HomePage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
-          {/* Instructions */}
-          {selectedDates.length === 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
-                <CalendarIcon className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-800">
-                  <div className="font-medium mb-2">📅 How to select dates:</div>
-                  <div className="space-y-1 text-blue-700">
-                    <div>• <strong>Single dates:</strong> Click on calendar days to select/deselect</div>
-                    <div>• <strong>Date ranges:</strong> Click first date, then Shift+click last date</div>
-                    <div>• <strong>Enhanced tooltips:</strong> Hover over calendar days for detailed info</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Selected dates info */}
           {selectedDates.length > 0 && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -366,6 +352,76 @@ export default function HomePage() {
                     {stats.periods.length}
                   </div>
                   <div className="text-sm text-gray-500">Custody Periods</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Collapsible Help Section */}
+        <div className="mt-8 bg-white rounded-lg shadow-sm border overflow-hidden">
+          <button
+            onClick={() => setIsHelpExpanded(!isHelpExpanded)}
+            className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center space-x-3">
+              <Info className="h-5 w-5 text-blue-600" />
+              <span className="font-medium text-gray-900">How to Use This App</span>
+            </div>
+            <ChevronDown className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${
+              isHelpExpanded ? 'transform rotate-180' : ''
+            }`} />
+          </button>
+          
+          {isHelpExpanded && (
+            <div className="border-t bg-blue-50 p-6">
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="font-medium text-blue-900 mb-3 flex items-center">
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    📅 Selecting Dates
+                  </h4>
+                  <div className="space-y-2 text-sm text-blue-800">
+                    <div>• <strong>Single dates:</strong> Click on calendar days to select/deselect</div>
+                    <div>• <strong>Date ranges:</strong> Click first date, then Shift+click last date</div>
+                    <div>• <strong>Remove dates:</strong> Click selected date chips or click dates again</div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="font-medium text-blue-900 mb-3 flex items-center">
+                    <Smartphone className="h-4 w-4 mr-2" />
+                    💡 Features & Tips
+                  </h4>
+                  <div className="space-y-2 text-sm text-blue-800">
+                    <div>• <strong>Enhanced tooltips:</strong> Hover over calendar days for detailed info</div>
+                    <div>• <strong>Quick actions:</strong> Right-click unavailable dates for options</div>
+                    <div>• <strong>Rule warnings:</strong> System shows warnings when 4-day rule would be violated</div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="font-medium text-blue-900 mb-3 flex items-center">
+                    <User className="h-4 w-4 mr-2" />
+                    🚫 Marking Unavailable
+                  </h4>
+                  <div className="space-y-2 text-sm text-blue-800">
+                    <div>• Select dates when someone can't have overnight care</div>
+                    <div>• Choose which person is unavailable</div>
+                    <div>• Review impact before confirming changes</div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="font-medium text-blue-900 mb-3 flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    ⚠️ Understanding Warnings
+                  </h4>
+                  <div className="space-y-2 text-sm text-blue-800">
+                    <div>• System tries to keep periods under 4 days</div>
+                    <div>• Warnings show when rules would be broken</div>
+                    <div>• You can still proceed if necessary</div>
+                  </div>
                 </div>
               </div>
             </div>
