@@ -247,6 +247,40 @@ export class ScheduleService {
   }
 
   /**
+   * TEMPORARY: Flip all assignments (personA <-> personB) to fix initial setup
+   * This can be used when the initial person was set incorrectly
+   */
+  async flipAllAssignments(): Promise<void> {
+    const currentSchedule = await this.getCurrentSchedule();
+    if (!currentSchedule) {
+      throw new Error('No schedule found to flip');
+    }
+
+    // Flip all assignments
+    const flippedEntries: Record<string, any> = {};
+    Object.entries(currentSchedule.entries).forEach(([date, entry]) => {
+      flippedEntries[date] = {
+        ...entry,
+        assignedTo: entry.assignedTo === 'personA' ? 'personB' : 'personA',
+        // Also flip the original assignment if it exists
+        originalAssignedTo: entry.originalAssignedTo 
+          ? (entry.originalAssignedTo === 'personA' ? 'personB' : 'personA')
+          : undefined,
+      };
+    });
+
+    // Update the schedule with flipped assignments and initial person
+    const flippedSchedule: CustodySchedule = {
+      ...currentSchedule,
+      entries: flippedEntries,
+      initialPerson: currentSchedule.initialPerson === 'personA' ? 'personB' as const : 'personA' as const,
+      lastUpdated: new Date().toISOString(),
+    };
+
+    await this.storage.saveSchedule(flippedSchedule);
+  }
+
+  /**
    * Get current storage information for debugging
    */
   getStorageInfo(): { primary: string; fallback?: string; isConfigured: boolean } {

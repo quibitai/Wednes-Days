@@ -6,6 +6,36 @@
   html {
     font-family: system-ui, sans-serif;
   }
+  
+  :root {
+    /* Custom color palette */
+    --color-person-a: #DEBD5E; /* Golden */
+    --color-person-b: #5E7FDE; /* Blue */
+    
+    /* Person A (Golden) variations */
+    --color-person-a-50: #faf8f1;
+    --color-person-a-100: #f4f0e3;
+    --color-person-a-200: #ebe0c4;
+    --color-person-a-300: #DEBD5E;
+    --color-person-a-400: #d4a63d;
+    --color-person-a-500: #c9932d;
+    --color-person-a-600: #b17f28;
+    --color-person-a-700: #926926;
+    --color-person-a-800: #785725;
+    --color-person-a-900: #634921;
+    
+    /* Person B (Blue) variations */
+    --color-person-b-50: #f1f4fd;
+    --color-person-b-100: #e3eafb;
+    --color-person-b-200: #c4d4f7;
+    --color-person-b-300: #5E7FDE;
+    --color-person-b-400: #4769d4;
+    --color-person-b-500: #3652c9;
+    --color-person-b-600: #2f46b1;
+    --color-person-b-700: #2a3d92;
+    --color-person-b-800: #253378;
+    --color-person-b-900: #202b63;
+  }
 }
 
 @layer components {
@@ -18,19 +48,21 @@
   }
   
   .calendar-day-person-a {
-    @apply bg-person-a-100 border-person-a-300;
+    background-color: var(--color-person-a-100);
+    border-color: var(--color-person-a-300);
   }
   
   .calendar-day-person-a:hover {
-    @apply bg-person-a-200;
+    background-color: var(--color-person-a-200);
   }
   
   .calendar-day-person-b {
-    @apply bg-person-b-100 border-person-b-300;
+    background-color: var(--color-person-b-100);
+    border-color: var(--color-person-b-300);
   }
   
   .calendar-day-person-b:hover {
-    @apply bg-person-b-200;
+    background-color: var(--color-person-b-200);
   }
   
   .calendar-day-unavailable {
@@ -43,5 +75,72 @@
   
   .calendar-day-adjusted {
     @apply ring-2 ring-yellow-400 ring-opacity-75;
+  }
+  
+  /* Custom background colors */
+  .bg-person-a {
+    background-color: var(--color-person-a);
+  }
+  
+  .bg-person-a-100 {
+    background-color: var(--color-person-a-100);
+  }
+  
+  .bg-person-a-200 {
+    background-color: var(--color-person-a-200);
+  }
+  
+  .bg-person-b {
+    background-color: var(--color-person-b);
+  }
+  
+  .bg-person-b-100 {
+    background-color: var(--color-person-b-100);
+  }
+  
+  .bg-person-b-200 {
+    background-color: var(--color-person-b-200);
+  }
+  
+  /* Custom border colors */
+  .border-person-a-200 {
+    border-color: var(--color-person-a-200);
+  }
+  
+  .border-person-a-300 {
+    border-color: var(--color-person-a-300);
+  }
+  
+  .border-person-a-400 {
+    border-color: var(--color-person-a-400);
+  }
+  
+  .border-person-b-200 {
+    border-color: var(--color-person-b-200);
+  }
+  
+  .border-person-b-300 {
+    border-color: var(--color-person-b-300);
+  }
+  
+  .border-person-b-400 {
+    border-color: var(--color-person-b-400);
+  }
+  
+  /* Custom text colors */
+  .text-person-a-800 {
+    color: var(--color-person-a-800);
+  }
+  
+  .text-person-a-900 {
+    color: var(--color-person-a-900);
+  }
+  
+  .text-person-b-800 {
+    color: var(--color-person-b-800);
+  }
+  
+  .text-person-b-900 {
+    color: var(--color-person-b-900);
   }
 } 

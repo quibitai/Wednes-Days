@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { addMonths } from 'date-fns';
-import { Calendar as CalendarIcon, Plus, BarChart3, Database, X, User, AlertCircle, Info, Check, ChevronDown, Smartphone, TrendingUp, Clock, Users } from 'lucide-react';
+import { addMonths, format } from 'date-fns';
+import { Plus, BarChart3, Database, X, User, AlertCircle, Info, Check, ChevronDown, Smartphone, TrendingUp, Clock, Users, ArrowRightLeft, Ban, StickyNote, Moon, Sun } from 'lucide-react';
+import Image from 'next/image';
 
 import Calendar from '@/components/Calendar';
 import SetupForm from '@/components/SetupForm';
-import UnavailabilityForm from '@/components/UnavailabilityForm';
 import DayDetailModal from '@/components/DayDetailModal';
 import LoadingSkeleton from '@/components/LoadingSkeleton';
 
@@ -25,10 +25,8 @@ export default function HomePage() {
   
   // UI state
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [showUnavailabilityForm, setShowUnavailabilityForm] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSubmittingUnavailability, setIsSubmittingUnavailability] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{ primary: string; fallback?: string; isConfigured: boolean } | null>(null);
   
   // Current user - for now we'll use personA as default, but this could be made dynamic
@@ -37,6 +35,36 @@ export default function HomePage() {
   // Help section state
   const [isHelpExpanded, setIsHelpExpanded] = useState(false);
   const [isStatsExpanded, setIsStatsExpanded] = useState(false);
+  
+  // Dark mode state
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  // Dark mode effect
+  useEffect(() => {
+    // Check for saved dark mode preference
+    const savedDarkMode = localStorage.getItem('darkMode') === 'true';
+    setIsDarkMode(savedDarkMode);
+    
+    // Apply dark mode class to document
+    if (savedDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    const newDarkMode = !isDarkMode;
+    setIsDarkMode(newDarkMode);
+    localStorage.setItem('darkMode', newDarkMode.toString());
+    
+    if (newDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
 
   // Check if app is initialized and set up subscriptions
   useEffect(() => {
@@ -103,31 +131,6 @@ export default function HomePage() {
   // Close modal
   const handleCloseModal = () => {
     setSelectedDate(null);
-  };
-
-  // Handle unavailability submission
-  const handleUnavailabilitySubmit = async (personId: 'personA' | 'personB', dates: string[]) => {
-    setIsSubmittingUnavailability(true);
-    
-    try {
-      const result = await scheduleService.markUnavailable(personId, dates);
-      
-      // Clear selected dates on success
-      if (result.success) {
-        setShowUnavailabilityForm(false);
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('Error submitting unavailability:', error);
-      return {
-        success: false,
-        message: 'Failed to submit unavailability request',
-        handoffCount: 0,
-      };
-    } finally {
-      setIsSubmittingUnavailability(false);
-    }
   };
 
   // Handle day assignment switch
@@ -251,7 +254,7 @@ export default function HomePage() {
   // If not initialized, show setup form
   if (isInitialized === false) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="max-w-md w-full">
           <SetupForm onSetup={handleSetup} isLoading={isLoading} />
         </div>
@@ -265,26 +268,41 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white dark:bg-black">
       {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-40">
+      <header className="bg-white dark:bg-gray-950 border-b dark:border-gray-800 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-3">
-              <CalendarIcon className="h-8 w-8 text-blue-600" />
+              <Image
+                src="/dog-icon.png"
+                alt="Wednes' Days"
+                width={48}
+                height={48}
+                className="object-contain"
+              />
               <div>
-                <h1 className="text-xl font-bold text-gray-900">
+                <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                   Wednes' Days
                 </h1>
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+              {/* Dark Mode Toggle */}
+              <button
+                onClick={toggleDarkMode}
+                className="p-2 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </button>
+
               {/* Help Icon with Dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setIsHelpExpanded(!isHelpExpanded)}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                  className="p-2 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                   title="How to use this app"
                 >
                   <Info className="h-5 w-5" />
@@ -296,15 +314,21 @@ export default function HomePage() {
                       className="fixed inset-0 z-40" 
                       onClick={() => setIsHelpExpanded(false)}
                     />
-                    <div className="absolute right-0 top-full mt-2 w-80 bg-white border shadow-lg rounded-lg z-50 p-4">
-                      <h3 className="font-medium text-gray-900 mb-3">Quick Guide</h3>
-                      <div className="space-y-2 text-sm text-gray-600">
-                        <div>• <strong>Click any day:</strong> Opens detailed options</div>
-                        <div>• <strong>Switch button:</strong> Changes custody assignment</div>
-                        <div>• <strong>Ban icon:</strong> Mark unavailable (informational)</div>
-                        <div>• <strong>Note icon:</strong> Add personal reminders</div>
-                        <div>• <strong>Split colors:</strong> Handoff days (custody changes)</div>
-                        <div>• <strong>Info icon:</strong> Shows day details on hover</div>
+                    <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800 shadow-lg rounded-lg z-50 p-4">
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">Quick Guide</h3>
+                      <div className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                        <div className="flex items-center">
+                          <ArrowRightLeft className="h-4 w-4 mr-3 text-blue-600 dark:text-blue-400" />
+                          <span>Changes custody assignment</span>
+                        </div>
+                        <div className="flex items-center">
+                          <Ban className="h-4 w-4 mr-3 text-red-600 dark:text-red-400" />
+                          <span>Mark unavailable (informational)</span>
+                        </div>
+                        <div className="flex items-center">
+                          <StickyNote className="h-4 w-4 mr-3 text-yellow-600 dark:text-yellow-400" />
+                          <span>Add or view notes</span>
+                        </div>
                       </div>
                     </div>
                   </>
@@ -323,11 +347,9 @@ export default function HomePage() {
             schedule={schedule}
             config={config}
             onDateClick={handleDateClick}
-            selectedDates={[]}
             currentMonth={currentMonth}
             onMonthChange={setCurrentMonth}
             onRemoveUnavailability={handleRemoveUnavailability}
-            onMarkUnavailable={() => setShowUnavailabilityForm(true)}
             currentUser={currentUser}
             onSwitchDay={handleSwitchDay}
             onToggleInformationalUnavailability={handleToggleInformationalUnavailability}
@@ -335,92 +357,87 @@ export default function HomePage() {
 
           {/* Monthly Distribution */}
           {monthlyStats && (
-            <div className="bg-white rounded-lg shadow-sm border p-6">
+            <div className="py-4">
               {/* Monthly Distribution with Visual Charts */}
               <div className="mb-6">
-                <h4 className="text-md font-medium text-gray-700 mb-4">
-                  {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} Distribution
+                <h4 className="text-md font-medium text-gray-800 dark:text-gray-300 mb-4">
+                  {format(currentMonth, 'MMMM yyyy')} Distribution
                 </h4>
                 
                 {/* Single stacked progress bar */}
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {/* Labels and counts */}
                   <div className="flex items-center justify-between text-sm">
                     <div className="flex items-center space-x-2">
-                      <span className="font-medium text-gray-700">{config.personA.name}</span>
-                      <span className="text-gray-600">{monthlyStats.personA} days</span>
+                      <span className="font-semibold text-gray-800 dark:text-gray-300">{config.personA.name}</span>
+                      <span className="text-gray-500 dark:text-gray-400">{monthlyStats.personA} days</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <span className="font-medium text-gray-700">{config.personB.name}</span>
-                      <span className="text-gray-600">{monthlyStats.personB} days</span>
+                      <span className="font-semibold text-gray-800 dark:text-gray-300">{config.personB.name}</span>
+                      <span className="text-gray-500 dark:text-gray-400">{monthlyStats.personB} days</span>
                     </div>
                   </div>
                   
                   {/* Stacked progress bar */}
-                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-2.5 overflow-hidden">
                     <div className="h-full flex">
                       <div 
-                        className="bg-blue-500 h-full transition-all duration-300" 
-                        style={{ width: `${monthlyStats.totalDays > 0 ? (monthlyStats.personA / monthlyStats.totalDays) * 100 : 0}%` }}
+                        className="h-full transition-all duration-300" 
+                        style={{ 
+                          backgroundColor: 'var(--color-person-a)',
+                          width: `${monthlyStats.totalDays > 0 ? (monthlyStats.personA / monthlyStats.totalDays) * 100 : 0}%` 
+                        }}
                       ></div>
                       <div 
-                        className="bg-orange-500 h-full transition-all duration-300" 
-                        style={{ width: `${monthlyStats.totalDays > 0 ? (monthlyStats.personB / monthlyStats.totalDays) * 100 : 0}%` }}
+                        className="h-full transition-all duration-300" 
+                        style={{ 
+                          backgroundColor: 'var(--color-person-b)',
+                          width: `${monthlyStats.totalDays > 0 ? (monthlyStats.personB / monthlyStats.totalDays) * 100 : 0}%` 
+                        }}
                       ></div>
                     </div>
-                  </div>
-                  
-                  {/* Total days below the bar */}
-                  <div className="text-center">
-                    <span className="text-gray-500 text-sm">Total: {monthlyStats.totalDays} days</span>
                   </div>
                 </div>
               </div>
 
               {/* Collapsible 30-Day Statistics */}
               {stats && (
-                <div className="border-t pt-6">
+                <div className="border-t border-gray-200 dark:border-gray-800 pt-4">
                   <button
                     onClick={() => setIsStatsExpanded(!isStatsExpanded)}
-                    className="w-full flex items-center justify-between text-left hover:bg-gray-50 transition-colors p-2 rounded-lg"
+                    className="w-full flex items-center justify-between text-left hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors p-2 rounded-lg"
                   >
                     <div className="flex items-center space-x-3">
-                      <TrendingUp className="h-5 w-5 text-blue-600" />
-                      <span className="font-medium text-gray-700">Next 30 Days Summary</span>
+                      <TrendingUp className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                      <span className="font-medium text-gray-800 dark:text-gray-300">Next 30 Days Summary</span>
                     </div>
-                    <ChevronDown className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${
+                    <ChevronDown className={`h-5 w-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${
                       isStatsExpanded ? 'transform rotate-180' : ''
                     }`} />
                   </button>
                   
                   {isStatsExpanded && (
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-6">
-                      <div className="text-center p-4 bg-blue-50 rounded-lg">
-                        <div className="flex items-center justify-center mb-2">
-                          <Users className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div className="text-2xl font-bold text-blue-900">
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="text-center p-4 bg-gray-100 dark:bg-gray-900 rounded-lg">
+                        <Users className="h-5 w-5 mx-auto mb-2 text-gray-500 dark:text-gray-400" />
+                        <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                           {stats.totalHandoffs}
                         </div>
-                        <div className="text-sm text-blue-600">Total Handoffs</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Total Handoffs</div>
                       </div>
-                      <div className="text-center p-4 bg-green-50 rounded-lg">
-                        <div className="flex items-center justify-center mb-2">
-                          <Clock className="h-5 w-5 text-green-600" />
-                        </div>
-                        <div className="text-2xl font-bold text-green-900">
+                      <div className="text-center p-4 bg-gray-100 dark:bg-gray-900 rounded-lg">
+                        <Clock className="h-5 w-5 mx-auto mb-2 text-gray-500 dark:text-gray-400" />
+                        <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                           {stats.averagePeriodLength.toFixed(1)}
                         </div>
-                        <div className="text-sm text-green-600">Avg Period Length</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Avg Period Length</div>
                       </div>
-                      <div className="text-center p-4 bg-purple-50 rounded-lg">
-                        <div className="flex items-center justify-center mb-2">
-                          <BarChart3 className="h-5 w-5 text-purple-600" />
-                        </div>
-                        <div className="text-2xl font-bold text-purple-900">
+                      <div className="text-center p-4 bg-gray-100 dark:bg-gray-900 rounded-lg">
+                        <BarChart3 className="h-5 w-5 mx-auto mb-2 text-gray-500 dark:text-gray-400" />
+                        <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                           {stats.periods.length}
                         </div>
-                        <div className="text-sm text-purple-600">Custody Periods</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Custody Periods</div>
                       </div>
                     </div>
                   )}
@@ -446,21 +463,9 @@ export default function HomePage() {
         />
       )}
 
-      {/* Unavailability Form Modal */}
-      {showUnavailabilityForm && (
-        <UnavailabilityForm
-          config={config}
-          selectedDates={[]}
-          schedule={schedule}
-          onClose={() => setShowUnavailabilityForm(false)}
-          onSubmit={handleUnavailabilitySubmit}
-          isSubmitting={isSubmittingUnavailability}
-        />
-      )}
-
       {/* Debug info */}
       {storageInfo && (
-        <div className="fixed bottom-4 right-4 bg-gray-800 text-white px-3 py-2 rounded-lg text-xs flex items-center space-x-2">
+        <div className="fixed bottom-4 right-4 bg-gray-900 text-white px-3 py-2 rounded-lg text-xs flex items-center space-x-2 border border-gray-700">
           <Database className="h-3 w-3" />
           <span>Using: {storageInfo.primary} (Configured: {storageInfo.isConfigured ? 'Yes' : 'No'})</span>
         </div>
