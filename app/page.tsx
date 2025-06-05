@@ -6,7 +6,6 @@ import { Plus, BarChart3, Database, X, User, AlertCircle, Info, Check, ChevronDo
 import Image from 'next/image';
 
 import Calendar from '@/components/Calendar';
-import SetupForm from '@/components/SetupForm';
 import DayDetailModal from '@/components/DayDetailModal';
 import LoadingSkeleton from '@/components/LoadingSkeleton';
 
@@ -76,21 +75,37 @@ export default function HomePage() {
         setStorageInfo(scheduleService.getStorageInfo());
         
         const initialized = await scheduleService.isInitialized();
-        setIsInitialized(initialized);
-
-        if (initialized) {
-          // Set up real-time subscriptions
-          scheduleUnsubscribe = scheduleService.subscribeToSchedule((newSchedule) => {
-            setSchedule(newSchedule);
+        
+        // If not initialized, auto-initialize with Jane and Adam
+        if (!initialized) {
+          console.log('Auto-initializing app with Jane and Adam...');
+          const today = new Date().toISOString().split('T')[0];
+          
+          await scheduleService.initializeApp({
+            personAName: 'Adam',
+            personBName: 'Jane', 
+            startDate: today,
+            initialPerson: 'personA' // Adam starts first
           });
-
-          configUnsubscribe = scheduleService.subscribeToConfig((newConfig) => {
-            setConfig(newConfig);
-          });
+          
+          console.log('App auto-initialized successfully');
         }
+        
+        setIsInitialized(true);
+
+        // Set up real-time subscriptions
+        scheduleUnsubscribe = scheduleService.subscribeToSchedule((newSchedule) => {
+          setSchedule(newSchedule);
+        });
+
+        configUnsubscribe = scheduleService.subscribeToConfig((newConfig) => {
+          setConfig(newConfig);
+        });
+        
       } catch (error) {
-        console.error('Error checking initialization:', error);
-        setIsInitialized(false);
+        console.error('Error during initialization:', error);
+        // Still set initialized to true so we show the UI, but with error state
+        setIsInitialized(true);
       }
     };
 
@@ -101,9 +116,9 @@ export default function HomePage() {
       if (scheduleUnsubscribe) scheduleUnsubscribe();
       if (configUnsubscribe) configUnsubscribe();
     };
-  }, [isInitialized]);
+  }, []);
 
-  // Handle initial setup
+  // Handle initial setup (keeping for future use but not currently used)
   const handleSetup = async (setupConfig: {
     personAName: string;
     personBName: string;
@@ -250,17 +265,6 @@ export default function HomePage() {
   // Get stats for display
   const stats = getScheduleStats();
   const monthlyStats = getMonthlyStats();
-
-  // If not initialized, show setup form
-  if (isInitialized === false) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="max-w-md w-full">
-          <SetupForm onSetup={handleSetup} isLoading={isLoading} />
-        </div>
-      </div>
-    );
-  }
 
   // Show loading skeleton while initializing
   if (!isInitialized || !schedule || !config) {
