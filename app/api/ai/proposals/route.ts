@@ -96,16 +96,31 @@ async function handleCreateProposal(data: any) {
       preferences || {}
     );
 
-    if (!result.success) {
+    if (!result.success || !result.proposal) {
       return NextResponse.json(
-        { error: result.error },
+        { error: result.error || 'Failed to generate proposal' },
         { status: 400 }
       );
     }
 
+    // Save the proposal using the proposal service
+    const savedProposal = await proposalService.createProposal({
+      createdBy: result.proposal.createdBy,
+      status: result.proposal.status,
+      title: result.proposal.title,
+      message: reason || result.proposal.message,
+      unavailableDates: result.proposal.unavailableDates,
+      originalSchedule: result.proposal.originalSchedule,
+      proposedSchedule: result.proposal.proposedSchedule,
+      affectedDateRange: result.proposal.affectedDateRange,
+      handoffReduction: result.proposal.handoffReduction,
+      fairnessImpact: result.proposal.fairnessImpact,
+      aiConfidence: result.proposal.aiConfidence
+    });
+
     return NextResponse.json({
       success: true,
-      proposal: result.proposal
+      proposal: savedProposal
     });
 
   } catch (error) {

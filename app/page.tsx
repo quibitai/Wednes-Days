@@ -10,6 +10,8 @@ import DayDetailModal from '@/components/DayDetailModal';
 import LoadingSkeleton from '@/components/LoadingSkeleton';
 import AIInterface from '@/components/AIInterface';
 import TimeZoneSelector from '@/components/TimeZoneSelector';
+import UserSwitcher from '@/components/UserSwitcher';
+import ProposalsDashboard from '@/components/ProposalsDashboard';
 
 import { ScheduleService } from '@/lib/services/scheduleService';
 import { StorageManager } from '@/lib/storage/storageManager';
@@ -31,7 +33,7 @@ export default function HomePage() {
   const [storageInfo, setStorageInfo] = useState<{ primary: string; fallback?: string; isConfigured: boolean } | null>(null);
   
   // Current user - for now we'll use personA as default, but this could be made dynamic
-  const [currentUser] = useState<'personA' | 'personB'>('personA');
+  const [currentUser, setCurrentUser] = useState<'personA' | 'personB'>('personA');
   
   // Help section state
   const [isHelpExpanded, setIsHelpExpanded] = useState(false);
@@ -312,6 +314,15 @@ export default function HomePage() {
                 {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
 
+              {/* User Switcher */}
+              {config && (
+                <UserSwitcher 
+                  currentUser={currentUser} 
+                  onUserChange={setCurrentUser}
+                  config={config}
+                />
+              )}
+
               {/* Time Zone Selector */}
               <TimeZoneSelector compact onTimeZoneChange={handleTimeZoneChange} />
 
@@ -371,6 +382,14 @@ export default function HomePage() {
             onSwitchDay={handleSwitchDay}
             onToggleInformationalUnavailability={handleToggleInformationalUnavailability}
           />
+
+          {/* Proposals Dashboard */}
+          {config && (
+            <ProposalsDashboard 
+              currentUser={currentUser}
+              config={config}
+            />
+          )}
 
           {/* AI Interface for Testing */}
           {schedule && (
