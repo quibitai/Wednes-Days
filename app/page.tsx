@@ -9,6 +9,7 @@ import Calendar from '@/components/Calendar';
 import DayDetailModal from '@/components/DayDetailModal';
 import LoadingSkeleton from '@/components/LoadingSkeleton';
 import AIInterface from '@/components/AIInterface';
+import TimeZoneSelector from '@/components/TimeZoneSelector';
 
 import { ScheduleService } from '@/lib/services/scheduleService';
 import { StorageManager } from '@/lib/storage/storageManager';
@@ -202,6 +203,13 @@ export default function HomePage() {
     }
   };
 
+  // Handle time zone change
+  const handleTimeZoneChange = (newTimeZone: string) => {
+    console.log('Time zone changed to:', newTimeZone);
+    // The schedule will automatically refresh due to date formatting changes
+    // No need to reload data since dates are stored in UTC
+  };
+
   // Handle removing unavailability
   const handleRemoveUnavailability = async (date: string) => {
     if (!schedule) return;
@@ -303,6 +311,9 @@ export default function HomePage() {
               >
                 {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
+
+              {/* Time Zone Selector */}
+              <TimeZoneSelector compact onTimeZoneChange={handleTimeZoneChange} />
 
               {/* Help Icon with Dropdown */}
               <div className="relative">
