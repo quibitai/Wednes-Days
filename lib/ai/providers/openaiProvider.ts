@@ -29,7 +29,6 @@ export class OpenAIProvider {
       maxTokens?: number;
       temperature?: number;
       jsonMode?: boolean;
-      stream?: boolean;
     } = {}
   ): Promise<AIResponse> {
     const startTime = Date.now();
@@ -42,8 +41,8 @@ export class OpenAIProvider {
         max_tokens: options.maxTokens || aiConfig.openai.maxTokens,
         temperature: options.temperature || aiConfig.openai.temperature,
         response_format: options.jsonMode ? { type: 'json_object' } : undefined,
-        stream: options.stream || false,
-      });
+        stream: false, // Always use non-streaming for consistency
+      }) as OpenAI.Chat.ChatCompletion; // Type assertion to ensure we get the non-stream response
 
       const responseTime = Date.now() - startTime;
       const usage = completion.usage;
@@ -106,7 +105,8 @@ export class OpenAIProvider {
         max_tokens: options.maxTokens || aiConfig.openai.maxTokens,
         temperature: options.temperature || aiConfig.openai.temperature,
         response_format: options.jsonMode ? { type: 'json_object' } : undefined,
-      });
+        stream: false, // Ensure non-streaming
+      }) as OpenAI.Chat.ChatCompletion; // Type assertion
 
       const usage = completion.usage;
       const cost = usage ? costCalculator.calculateCost(usage.prompt_tokens, usage.completion_tokens) : 0;

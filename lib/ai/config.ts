@@ -5,25 +5,25 @@
 export const aiConfig = {
   // OpenAI Configuration
   openai: {
-    model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
-    fallbackModel: process.env.OPENAI_FALLBACK_MODEL || 'gpt-4o-mini',
+    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    fallbackModel: process.env.OPENAI_FALLBACK_MODEL || 'gpt-3.5-turbo',
     apiKey: process.env.OPENAI_API_KEY,
     maxTokens: 1000,
     temperature: 0.3,
     embeddingModel: 'text-embedding-3-small',
   },
 
-  // Supabase Configuration
+  // Supabase Configuration (optional for AI features)
   supabase: {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   },
 
-  // Vercel Blob Configuration
+  // Vercel Blob Configuration (optional for AI features)
   blob: {
-    token: process.env.BLOB_READ_WRITE_TOKEN,
-    baseUrl: process.env.BLOB_BASE_URL,
+    token: process.env.BLOB_READ_WRITE_TOKEN || '',
+    baseUrl: process.env.BLOB_BASE_URL || '',
   },
 
   // Cost Management
@@ -82,16 +82,14 @@ export function validateAIConfig(): { valid: boolean; errors: string[] } {
     errors.push('OPENAI_API_KEY is required');
   }
 
-  if (!aiConfig.supabase.url) {
-    errors.push('NEXT_PUBLIC_SUPABASE_URL is required');
+  // Supabase and Blob are optional for basic AI functionality
+  // Only warn if features requiring them are enabled
+  if (aiConfig.features.vectorSearchEnabled && !aiConfig.supabase.url) {
+    errors.push('NEXT_PUBLIC_SUPABASE_URL is required when vector search is enabled');
   }
 
-  if (!aiConfig.supabase.anonKey) {
-    errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is required');
-  }
-
-  if (!aiConfig.blob.token) {
-    errors.push('BLOB_READ_WRITE_TOKEN is required');
+  if (aiConfig.features.vectorSearchEnabled && !aiConfig.supabase.anonKey) {
+    errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is required when vector search is enabled');
   }
 
   return {
@@ -102,10 +100,10 @@ export function validateAIConfig(): { valid: boolean; errors: string[] } {
 
 // Cost calculation helpers
 export const costCalculator = {
-  // Placeholder pricing - will need to be updated with actual GPT-4.1-mini pricing
-  gpt41Mini: {
-    inputCostPer1K: 0.0001, // Estimate
-    outputCostPer1K: 0.0004, // Estimate
+  // GPT-4o-mini pricing
+  gpt4oMini: {
+    inputCostPer1K: 0.00015, // $0.15 per 1M input tokens
+    outputCostPer1K: 0.0006, // $0.60 per 1M output tokens
   },
   
   embedding: {
@@ -113,8 +111,8 @@ export const costCalculator = {
   },
 
   calculateCost(inputTokens: number, outputTokens: number): number {
-    const inputCost = (inputTokens / 1000) * this.gpt41Mini.inputCostPer1K;
-    const outputCost = (outputTokens / 1000) * this.gpt41Mini.outputCostPer1K;
+    const inputCost = (inputTokens / 1000) * this.gpt4oMini.inputCostPer1K;
+    const outputCost = (outputTokens / 1000) * this.gpt4oMini.outputCostPer1K;
     return inputCost + outputCost;
   },
 
