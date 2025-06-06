@@ -8,6 +8,7 @@ import Image from 'next/image';
 import Calendar from '@/components/Calendar';
 import DayDetailModal from '@/components/DayDetailModal';
 import LoadingSkeleton from '@/components/LoadingSkeleton';
+import AIInterface from '@/components/AIInterface';
 
 import { ScheduleService } from '@/lib/services/scheduleService';
 import { StorageManager } from '@/lib/storage/storageManager';
@@ -359,6 +360,17 @@ export default function HomePage() {
             onSwitchDay={handleSwitchDay}
             onToggleInformationalUnavailability={handleToggleInformationalUnavailability}
           />
+
+          {/* AI Interface for Testing */}
+          {schedule && (
+            <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">🤖 AI Schedule Assistant (Testing)</h2>
+              <AIInterface 
+                userId={currentUser} 
+                currentSchedule={schedule.entries || {}} 
+              />
+            </div>
+          )}
 
           {/* Monthly Distribution */}
           {monthlyStats && (
