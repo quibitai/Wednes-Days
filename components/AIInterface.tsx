@@ -8,8 +8,19 @@ interface AIInterfaceProps {
   currentSchedule: Record<string, any>;
 }
 
+interface PendingAction {
+  type: 'generate_proposal';
+  data: {
+    dates: string[];
+    reason: string;
+    preferences: any;
+    action: string;
+  };
+}
+
 export default function AIInterface({ userId, currentSchedule }: AIInterfaceProps) {
   const [input, setInput] = useState('');
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [messages, setMessages] = useState<Array<{
     id: string;
     type: 'user' | 'ai' | 'system';
@@ -39,10 +50,43 @@ export default function AIInterface({ userId, currentSchedule }: AIInterfaceProp
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const inputText = input.trim().toLowerCase();
     setInput('');
     setIsLoading(true);
 
     try {
+      // Check if this is a response to a pending action
+      if (pendingAction) {
+        if (inputText === 'yes' || inputText === 'y' || inputText === 'sure' || inputText === 'ok' || inputText === 'okay') {
+          // User confirmed the pending action
+          if (pendingAction.type === 'generate_proposal') {
+            await generateProposal(
+              pendingAction.data.dates, 
+              pendingAction.data.reason, 
+              pendingAction.data.preferences
+            );
+          }
+          setPendingAction(null);
+          setIsLoading(false);
+          return;
+        } else if (inputText === 'no' || inputText === 'n' || inputText === 'cancel' || inputText === 'nevermind') {
+          // User cancelled the pending action
+          const cancelMessage = {
+            id: (Date.now() + 1).toString(),
+            type: 'ai' as const,
+            content: 'Okay, I\'ve cancelled that action. Let me know if you need help with anything else!',
+            timestamp: new Date().toISOString(),
+            success: true
+          };
+          setMessages(prev => [...prev, cancelMessage]);
+          setPendingAction(null);
+          setIsLoading(false);
+          return;
+        }
+        // If it's not a clear yes/no, treat as a new request and clear pending action
+        setPendingAction(null);
+      }
+
       // Parse natural language input
       const parseResponse = await fetch('/api/ai/parse', {
         method: 'POST',
@@ -74,9 +118,15 @@ Would you like me to generate a schedule proposal for these changes?`,
 
         setMessages(prev => [...prev, aiMessage]);
 
-        // Auto-generate proposal if confidence is high enough
+        // Auto-generate proposal if confidence is high enough for swaps
         if (parseResult.data.confidence > 0.8 && parseResult.data.action === 'request_swap') {
           await generateProposal(parseResult.data.dates, parseResult.data.reason, parseResult.data.preferences);
+        } else {
+          // Set pending action for user confirmation
+          setPendingAction({
+            type: 'generate_proposal',
+            data: parseResult.data
+          });
         }
 
       } else {
@@ -247,13 +297,27 @@ The proposal has been sent for approval. You'll receive a notification when it's
 
       {/* Input */}
       <form onSubmit={handleSubmit} className="p-4 border-t border-gray-200 dark:border-gray-700">
+        {pendingAction && (
+          <div className="mb-2 text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
+            <Clock className="w-3 h-3" />
+            <span>Waiting for your response (yes/no)</span>
+          </div>
+        )}
         <div className="flex gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your request... (e.g., 'I'm unavailable Tuesday and Wednesday')"
-            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:text-white text-sm"
+            placeholder={
+              pendingAction 
+                ? "Type 'yes' to confirm or 'no' to cancel..."
+                : "Type your request... (e.g., 'I'm unavailable Tuesday and Wednesday')"
+            }
+            className={`flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 text-sm dark:bg-gray-800 dark:text-white ${
+              pendingAction
+                ? 'border-blue-300 dark:border-blue-600 focus:ring-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
+            }`}
             disabled={isLoading}
           />
           <button
