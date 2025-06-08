@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Dog Custody Scheduler',
-  description: 'Manage shared custody schedule for your beloved dog',
+  title: "Wednes' Days",
+  description: 'A simple way to manage shared schedules.',
 }
 
 export default function RootLayout({
