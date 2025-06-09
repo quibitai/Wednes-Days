@@ -4,8 +4,10 @@ import { AIService } from '@/lib/ai/services/aiService';
 const aiService = new AIService();
 
 export async function POST(request: NextRequest) {
+  console.log('AI Parse endpoint hit.'); // New log
   try {
     const { input, userId } = await request.json();
+    console.log('Received NLP request:', { input, userId }); // New log
 
     // Validate input
     if (!input || typeof input !== 'string') {
@@ -24,6 +26,7 @@ export async function POST(request: NextRequest) {
 
     // Parse the natural language input
     const result = await aiService.parseNaturalLanguage(input, userId);
+    console.log('Result from aiService.parseNaturalLanguage:', result); // New log
 
     // Return the result
     return NextResponse.json({
@@ -40,7 +43,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error in AI parse endpoint:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { success: false, error: 'Internal server error in AI parse endpoint.' }, // More specific error
       { status: 500 }
     );
   }

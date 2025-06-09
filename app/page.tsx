@@ -18,7 +18,8 @@ import type {
   CustodySchedule, 
   AppConfig,
   SchedulePreview,
-  Note
+  Note,
+  ScheduleEntry
 } from '@/types';
 
 const storageManager = new StorageManager();
@@ -55,7 +56,6 @@ export default function Home() {
       try {
         setIsLoading(true);
         
-        // Debug: Check storage info
         const storageInfo = storageManager.getStorageInfo();
         console.log('Storage Info:', storageInfo);
         
@@ -70,7 +70,6 @@ export default function Home() {
         setConfig(savedConfig);
         setSchedule(savedSchedule);
         
-        // Set config in preview manager for AI requests
         if (savedConfig) {
           previewManager.setConfig(savedConfig);
         }
@@ -88,38 +87,38 @@ export default function Home() {
     loadData();
   }, []);
 
-  // Initialize preview from current schedule
   const initializePreview = (currentSchedule: Record<string, any>) => {
     const newPreview = previewManager.initializePreview(currentSchedule);
     setPreview(newPreview);
   };
 
-  // Handle marking a day as unavailable
-  const handleMarkUnavailable = async (date: string, personId: 'personA' | 'personB') => {
+  const handleMarkUnavailable = (date: string, personId: 'personA' | 'personB') => {
     if (!preview) return;
 
-    try {
-      setIsProcessing(true);
-      
-      // Mark as unavailable and generate AI-powered proposals
-      let updatedPreview = previewManager.markUnavailable(preview, date, personId);
-      updatedPreview = await previewManager.generateAIProposals(updatedPreview);
-      
-      setPreview(updatedPreview);
-    } catch (error) {
-      console.error('Error marking unavailable:', error);
-    } finally {
-      setIsProcessing(false);
-    }
+    const tempPreview = previewManager.markUnavailable(preview, date, personId);
+    setPreview(tempPreview); // Update UI to show the 'unavailable' status
+
+    // Run the rebalance in the background
+    setIsProcessing(true);
+    previewManager.generateAIProposals(tempPreview)
+        .then(finalPreview => {
+            setPreview(finalPreview);
+        })
+        .catch(error => {
+            console.error('Error during background AI proposal:', error);
+            // Optionally revert to the simple markUnavailable state if AI fails
+            setPreview(tempPreview);
+        })
+        .finally(() => {
+            setIsProcessing(false);
+        });
   };
 
-  // Handle removing unavailability
   const handleRemoveUnavailable = async (date: string) => {
     if (!preview) return;
 
     try {
       setIsProcessing(true);
-      
       const updatedPreview = previewManager.removeUnavailable(preview, date);
       setPreview(updatedPreview);
     } catch (error) {
@@ -129,13 +128,11 @@ export default function Home() {
     }
   };
 
-  // Handle manual adjustment
   const handleManualAdjustment = async (date: string, newAssignment: 'personA' | 'personB') => {
     if (!preview) return;
 
     try {
       setIsProcessing(true);
-      
       const updatedPreview = previewManager.makeManualAdjustment(preview, date, newAssignment);
       setPreview(updatedPreview);
     } catch (error) {
@@ -145,13 +142,11 @@ export default function Home() {
     }
   };
 
-  // Handle schedule reset
   const handleScheduleReset = async () => {
     try {
       const loadedSchedule = await storageManager.loadSchedule();
       if (loadedSchedule) {
         setSchedule(loadedSchedule);
-        // Reset preview to clean state
         const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
         setPreview(newPreview);
       }
@@ -160,27 +155,21 @@ export default function Home() {
     }
   };
 
-  // Handle configuration changes
   const handleConfigChange = async (newConfig: AppConfig) => {
     try {
       await storageManager.saveConfig(newConfig);
       setConfig(newConfig);
-      
-      // Update the preview manager with the new config
       previewManager.setConfig(newConfig);
     } catch (error) {
       console.error('Error saving config:', error);
     }
   };
 
-  // Handle month change with automatic schedule extension
   const handleMonthChange = async (newMonth: Date) => {
     setCurrentMonth(newMonth);
     
-    // If we have a schedule, ensure the new month is populated
     if (schedule) {
       try {
-        // Check if this month needs population
         const monthKey = newMonth.toISOString().slice(0, 7);
         const hasEntriesForMonth = Object.keys(schedule.entries).some(dateStr => 
           dateStr.startsWith(monthKey)
@@ -196,7 +185,6 @@ export default function Home() {
           
           setSchedule(extendedSchedule);
           
-          // Update preview if it exists
           if (preview) {
             initializePreview(extendedSchedule.entries);
           }
@@ -207,7 +195,6 @@ export default function Home() {
     }
   };
 
-  // Generate initial schedule if none exists
   const handleGenerateSchedule = async () => {
     if (!config) return;
     
@@ -216,7 +203,6 @@ export default function Home() {
       const startDate = config.startDate ? new Date(config.startDate) : new Date();
       const initialPerson = config.initialPerson || 'personA';
       
-      // Generate a full year worth of schedule initially (365 days)
       const newScheduleEntries = scheduleGenerator.generate3DayRotation(
         startDate,
         initialPerson,
@@ -233,7 +219,6 @@ export default function Home() {
       await storageManager.saveSchedule(newSchedule);
       setSchedule(newSchedule);
       
-      // Initialize preview system
       initializePreview(newSchedule);
       
     } catch (error) {
@@ -243,67 +228,52 @@ export default function Home() {
     }
   };
 
-  // Handle natural language input
   const handleNaturalLanguageInput = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nlpInput.trim() || !preview) return;
 
+    const originalInput = nlpInput;
+    setNlpInput('');
+    setIsProcessing(true);
+
     try {
-      setIsProcessing(true);
-      
-      console.log('Processing natural language input:', nlpInput);
-      
-      // Parse the natural language input
-      const response = await fetch('/api/ai/parse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          input: nlpInput,
-          userId: currentUser
-        })
-      });
+        const response = await fetch('/api/ai/parse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ input: originalInput, userId: currentUser })
+        });
 
-      console.log('API response status:', response.status);
+        if (!response.ok) throw new Error('Failed to process request.');
 
-      if (!response.ok) throw new Error('Failed to process natural language input');
+        const result = await response.json();
+        if (!result.success) throw new Error(result.error || 'Could not parse request.');
 
-      const result = await response.json();
-      console.log('API response:', result);
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to parse natural language input');
-      }
+        const { action, dates, person } = result.data || {};
 
-      const { action, dates, person } = result.data || {};
-      console.log('Parsed action:', { action, dates, person });
+        if (action === 'mark_unavailable' && dates?.length > 0) {
+            let tempPreview = preview;
+            for (const date of dates) {
+                tempPreview = previewManager.markUnavailable(tempPreview, date, person || currentUser);
+            }
+            setPreview(tempPreview); // Show the initial 'unavailable' marks
 
-      // Apply the parsed action to preview
-      let updatedPreview = preview;
+            // Now run the full rebalance
+            const finalPreview = await previewManager.generateAIProposals(tempPreview);
+            setPreview(finalPreview);
 
-      if (action === 'mark_unavailable' && dates && person) {
-        for (const date of dates) {
-          updatedPreview = previewManager.markUnavailable(updatedPreview, date, person || currentUser);
-          updatedPreview = await previewManager.generateAIProposals(updatedPreview);
+        } else {
+            alert(`Action understood: ${action}, but not yet implemented.`);
         }
-      } else if (action === 'manual_assignment' && dates && person) {
-        for (const date of dates) {
-          updatedPreview = previewManager.makeManualAdjustment(updatedPreview, date, person);
-        }
-      }
 
-      setPreview(updatedPreview);
-      setNlpInput('');
     } catch (error) {
-      console.error('Error processing natural language input:', error);
-      alert('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setNlpInput(originalInput);
     } finally {
-      setIsProcessing(false);
+        setIsProcessing(false);
     }
   };
 
-  // Handle day detail modal
   const handleDayDetailClick = (date: string) => {
-    console.log('Day clicked:', date); // Debug log
     setSelectedDate(date);
     setShowDayDetail(true);
   };
@@ -326,7 +296,6 @@ export default function Home() {
       
       await storageManager.saveNote(date, newNote);
       
-      // Reload schedule to show updated note
       const loadedSchedule = await storageManager.loadSchedule();
       if (loadedSchedule) {
         setSchedule(loadedSchedule);
@@ -346,11 +315,9 @@ export default function Home() {
     
     try {
       await storageManager.deleteNote(date);
-      // Reload the schedule to show the note removal
       const loadedSchedule = await storageManager.loadSchedule();
       if (loadedSchedule) {
         setSchedule(loadedSchedule);
-        // Reset preview to clean state with updated notes
         const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
         setPreview(newPreview);
       }
@@ -360,20 +327,16 @@ export default function Home() {
     }
   };
 
-  // Handle toggling day blocking (informational unavailability)
   const handleToggleBlockDay = async (date: string, personId: 'personA' | 'personB') => {
     if (!schedule) return;
 
     try {
-      // Toggle the informational unavailability using the existing storage manager method
       await storageManager.toggleInformationalUnavailability(date, personId);
       
-      // Reload the schedule to show the updated block status
       const loadedSchedule = await storageManager.loadSchedule();
       if (loadedSchedule) {
         setSchedule(loadedSchedule);
         
-        // Update the preview if it exists
         if (preview) {
           const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
           setPreview(newPreview);
@@ -385,45 +348,37 @@ export default function Home() {
     }
   };
 
-  // Handle revert from history
   const handleRevertChange = async (historyId: string) => {
     try {
       const reverted = await storageManager.revertChange(historyId);
       if (reverted) {
-        // Reload the schedule to show reverted changes
         const loadedSchedule = await storageManager.loadSchedule();
         if (loadedSchedule) {
           setSchedule(loadedSchedule);
-          // Reset preview to clean state
           const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
           setPreview(newPreview);
         }
       }
     } catch (error) {
       console.error('Error reverting change:', error);
-      throw error; // Re-throw to let HistoryPanel handle the error
+      throw error;
     }
   };
 
-  // Test function to create sample history entries
   const createTestHistory = async () => {
     try {
       if (!schedule) return;
       
-      // Get a date that exists in the schedule
       const testDate = Object.keys(schedule.entries)[0];
       if (!testDate) return;
       
       console.log('Creating test history entry for date:', testDate);
       
-      // Use the switchDayAssignmentWithHistory method to create a test history entry
       await storageManager.switchDayAssignmentWithHistory(testDate, currentUser);
       
-      // Reload the schedule
       const loadedSchedule = await storageManager.loadSchedule();
       if (loadedSchedule) {
         setSchedule(loadedSchedule);
-        // Reset preview to clean state
         const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
         setPreview(newPreview);
       }
@@ -434,17 +389,14 @@ export default function Home() {
     }
   };
 
-  // Handle accepting all changes
   const handleAcceptChanges = async () => {
     if (!preview || !schedule) return;
 
     try {
       setIsProcessing(true);
       
-      // Commit changes
       const finalSchedule = previewManager.commitChanges(preview);
       
-      // Get the changes that were made
       const changedEntries: Record<string, any> = {};
       Object.keys(finalSchedule).forEach(date => {
         if (JSON.stringify(finalSchedule[date]) !== JSON.stringify(schedule.entries[date])) {
@@ -452,7 +404,6 @@ export default function Home() {
         }
       });
 
-      // Save changes with history tracking if there are any changes
       if (Object.keys(changedEntries).length > 0) {
         await storageManager.bulkUpdateScheduleWithHistory(
           changedEntries,
@@ -462,7 +413,6 @@ export default function Home() {
         );
       }
       
-      // Reload and reset preview
       const loadedSchedule = await storageManager.loadSchedule();
       if (loadedSchedule) {
         setSchedule(loadedSchedule);
@@ -476,7 +426,6 @@ export default function Home() {
     }
   };
 
-  // Handle discarding all changes
   const handleDiscardChanges = () => {
     if (!schedule) return;
     initializePreview(schedule.entries);
@@ -518,6 +467,7 @@ export default function Home() {
             config={config}
             onSave={handleConfigChange}
             onClose={() => setShowConfig(false)}
+            onScheduleReset={handleScheduleReset}
           />
         )}
       </div>
@@ -550,7 +500,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto p-4 space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-3">
             <Image src="/dog-icon.png" alt="Dog Icon" width={64} height={64} className="h-16 w-16" />
@@ -562,7 +511,6 @@ export default function Home() {
           </div>
           
           <div className="flex items-center space-x-3">
-            {/* History */}
             <button
               onClick={() => setShowHistory(true)}
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -571,7 +519,6 @@ export default function Home() {
               <History className="h-5 w-5" />
             </button>
 
-            {/* View Toggle */}
             {schedule && (
               <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
                 <button
@@ -597,7 +544,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* User Toggle */}
             {config && (
               <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-500">
                 <button
@@ -625,7 +571,6 @@ export default function Home() {
               </div>
             )}
             
-            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -634,7 +579,6 @@ export default function Home() {
               {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
 
-            {/* Settings */}
             <button
               onClick={() => setShowConfig(true)}
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -644,10 +588,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Main Content - Full Width */}
         {schedule && config && (
           <div className="w-full">
-            {/* Calendar/List View */}
             {viewMode === 'calendar' ? (
               preview && (
                 <PreviewCalendar
@@ -672,12 +614,9 @@ export default function Home() {
                 onDayDetailClick={handleDayDetailClick}
               />
             )}
-
-
           </div>
         )}
 
-        {/* Natural Language Input - Show when preview system is active */}
         {preview && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-500 p-4">
             <form onSubmit={handleNaturalLanguageInput} className="space-y-3">
@@ -708,7 +647,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Schedule Summary - moved below Smart Commands */}
         {schedule && config && (
           <ScheduleSummary
             preview={preview || undefined}
@@ -718,7 +656,6 @@ export default function Home() {
           />
         )}
 
-        {/* Configuration Modal */}
         {showConfig && (
           <ConfigurationPanel
             config={config}
@@ -729,7 +666,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Day Detail Modal */}
       {showDayDetail && selectedDate && schedule && config && (
         <DayDetailModal
           date={selectedDate}
@@ -742,7 +678,6 @@ export default function Home() {
         />
       )}
 
-      {/* History Panel */}
       <HistoryPanel
         isOpen={showHistory}
         onClose={() => setShowHistory(false)}

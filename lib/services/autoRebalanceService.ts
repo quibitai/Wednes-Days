@@ -495,77 +495,88 @@ export class AutoRebalanceService {
     fortnightDates: string[],
     unavailableDays: Record<string, 'personA' | 'personB'>
   ): void {
-    // Get current fortnightly distribution
     const fortnightStats = this.getPeriodStats(schedule, fortnightDates);
-    
-    // Target: 6-8 days per person over 14 days (similar to 3-4 per week)
     const targetMin = 6;
     const targetMax = 8;
-    
-    // If fortnight is already balanced, no changes needed
-    if (fortnightStats.personA >= targetMin && fortnightStats.personA <= targetMax && 
+
+    if (fortnightStats.personA >= targetMin && fortnightStats.personA <= targetMax &&
         fortnightStats.personB >= targetMin && fortnightStats.personB <= targetMax) {
-      return;
+        return;
     }
 
-    // Find who has too many/few days this fortnight
-    const overAssigned = fortnightStats.personA > targetMax ? 'personA' : 
+    const overAssigned = fortnightStats.personA > targetMax ? 'personA' :
                         fortnightStats.personB > targetMax ? 'personB' : null;
-    
+
     if (!overAssigned) return;
-    
     const underAssigned = overAssigned === 'personA' ? 'personB' : 'personA';
-    
-    // Advanced candidate filtering with 1-day island prevention
-    const swapCandidates = fortnightDates.filter(date => {
-      const entry = schedule[date];
-      const isTargetPersonUnavailable = entry?.informationalUnavailability?.[underAssigned];
 
-      // Base conditions: Exclude invalid candidates
-      if (!entry || entry.assignedTo !== overAssigned || entry.isUnavailable || unavailableDays[date] || isTargetPersonUnavailable) {
-        return false;
-      }
-
-      // Logic to Avoid Creating 1-Day Islands
-      const dateIndex = fortnightDates.indexOf(date);
-      const prevDate = fortnightDates[dateIndex - 1];
-      const nextDate = fortnightDates[dateIndex + 1];
-      const isPrevDaySamePerson = schedule[prevDate]?.assignedTo === overAssigned;
-      const isNextDaySamePerson = schedule[nextDate]?.assignedTo === overAssigned;
-
-      // Prevents breaking a 2-day block, which would orphan the other day.
-      if (isPrevDaySamePerson && !isNextDaySamePerson) { // Part of a block ending here
-        const prevPrevDate = fortnightDates[dateIndex - 2];
-        if (schedule[prevPrevDate]?.assignedTo !== overAssigned) return false;
-      }
-      if (!isPrevDaySamePerson && isNextDaySamePerson) { // Part of a block starting here
-        const nextNextDate = fortnightDates[dateIndex + 2];
-        if (schedule[nextNextDate]?.assignedTo !== overAssigned) return false;
-      }
-
-      return true; // This is a valid candidate for swapping.
+    // Get a list of all days that could possibly be swapped
+    const allPossibleSwapDays = fortnightDates.filter(date => {
+        const entry = schedule[date];
+        return entry &&
+               entry.assignedTo === overAssigned &&
+               !entry.isUnavailable &&
+               !unavailableDays[date] &&
+               !entry.informationalUnavailability?.[underAssigned];
     });
 
-    // Calculate how many swaps we need
-    const excessDays = Math.max(0, fortnightStats[overAssigned] - targetMax);
-    const neededDays = Math.max(0, targetMin - fortnightStats[underAssigned]);
-    const swapsNeeded = Math.min(excessDays, neededDays, swapCandidates.length);
-
-    // Perform swaps, preferring to create consecutive blocks
-    const sortedCandidates = this.sortCandidatesByHandoffReduction(
-      schedule, 
-      swapCandidates, 
-      fortnightDates, 
-      underAssigned
+    const swapsToMake = Math.min(
+        fortnightStats[overAssigned] - targetMax,
+        targetMin - fortnightStats[underAssigned],
+        allPossibleSwapDays.length
     );
 
-    for (let i = 0; i < swapsNeeded; i++) {
-      const dateToSwap = sortedCandidates[i];
-      schedule[dateToSwap] = {
-        ...schedule[dateToSwap],
-        assignedTo: underAssigned,
-        originalAssignedTo: schedule[dateToSwap].originalAssignedTo || overAssigned
-      };
+    if (swapsToMake <= 0) return;
+
+    // Iteratively find the best days to swap
+    for (let i = 0; i < swapsToMake; i++) {
+        let bestCandidate: string | null = null;
+        let bestScore = -1;
+
+        // Find the best candidate among the remaining possibilities
+        for (const candidateDate of allPossibleSwapDays) {
+            // Temporarily apply the swap to check its validity
+            const tempSchedule = JSON.parse(JSON.stringify(schedule));
+            tempSchedule[candidateDate].assignedTo = underAssigned;
+
+            // Check if this swap creates an island for the 'overAssigned' person
+            const dateIndex = fortnightDates.indexOf(candidateDate);
+            const prevDate = fortnightDates[dateIndex - 1];
+            const nextDate = fortnightDates[dateIndex + 1];
+
+            let createsIsland = false;
+            // Check if previous day is now an island
+            if (tempSchedule[prevDate]?.assignedTo === overAssigned && 
+                tempSchedule[fortnightDates[dateIndex - 2]]?.assignedTo !== overAssigned && 
+                tempSchedule[candidateDate]?.assignedTo !== overAssigned) {
+                createsIsland = true;
+            }
+            // Check if next day is now an island
+            if (tempSchedule[nextDate]?.assignedTo === overAssigned && 
+                tempSchedule[candidateDate]?.assignedTo !== overAssigned && 
+                tempSchedule[fortnightDates[dateIndex + 2]]?.assignedTo !== overAssigned) {
+                createsIsland = true;
+            }
+
+            if (!createsIsland) {
+                const score = this.calculateHandoffReductionScore(schedule, candidateDate, fortnightDates, underAssigned);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestCandidate = candidateDate;
+                }
+            }
+        }
+
+        if (bestCandidate) {
+            // Apply the best found swap permanently
+            schedule[bestCandidate].assignedTo = underAssigned;
+            schedule[bestCandidate].originalAssignedTo = schedule[bestCandidate].originalAssignedTo || overAssigned;
+            // Remove the swapped day from future consideration
+            allPossibleSwapDays.splice(allPossibleSwapDays.indexOf(bestCandidate), 1);
+        } else {
+            // No valid swap found in this iteration, so we stop
+            break;
+        }
     }
   }
 } 

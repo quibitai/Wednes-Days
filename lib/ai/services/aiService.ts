@@ -62,13 +62,14 @@ export class AIService {
     const interactionId = uuidv4();
 
     if (!this.isReady()) {
+      console.error('AI Service is not ready. Check configuration.'); // New log
       const interaction = this.createInteraction(
         interactionId, userId, 'natural_language', input, 
         'AI service not available', startTime, false
       );
       return {
         success: false,
-        error: 'AI service not available',
+        error: 'AI service is not configured. Please add your OpenAI API key.', // More user-friendly error
         interaction
       };
     }
