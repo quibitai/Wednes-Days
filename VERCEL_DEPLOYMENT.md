@@ -49,6 +49,11 @@ This guide will help you deploy the Dog Custody Scheduler application to Vercel 
 
 In your Vercel project settings, add these environment variables:
 
+#### AI Configuration (Required for v2.2.0+):
+```
+OPENAI_API_KEY=your_openai_api_key
+```
+
 #### For Vercel KV:
 ```
 KV_REST_API_URL=your_kv_rest_api_url
@@ -103,25 +108,26 @@ The app is already optimized with:
 - **Vercel Blob**: 5-second polling for real-time updates
 - **localStorage**: Instant updates with cross-tab sync
 
-## 🎯 Latest Features Included
+## 🎯 Latest Features Included (v2.2.0)
 
-### Flexible 4-Day Rule System
-- ✅ **Warning-based approach**: Users can override the 4-day rule with clear warnings
-- ✅ **Smart conflict resolution**: Multiple strategies attempt to resolve conflicts automatically
-- ✅ **Visual warnings**: Yellow warning cards show exactly which violations will occur
-- ✅ **Informed decisions**: Users see full impact before confirming schedule changes
+### 🤖 AI-Powered Schedule Rebalancing
+- ✅ **GPT-4.1 Mini Integration**: Advanced AI analyzes your entire schedule context
+- ✅ **3-Night Block Optimization**: Targets ideal 3-night custody periods (2-4 nights acceptable)
+- ✅ **Smart Pattern Recognition**: Understands existing blocks and prevents problematic extensions
+- ✅ **Zero Single-Night Policy**: AI strictly avoids creating isolated single-night assignments
+- ✅ **Natural Language Commands**: Tell the AI what you want: "I can't have Emma next Friday"
 
-### Advanced Scheduling Algorithm
-- ✅ **Strategy 1**: Early handoff (end custody before unavailable day)
-- ✅ **Strategy 2**: Extension (other person takes over through conflict)
-- ✅ **Strategy 3**: Period shifting (adjust custody boundaries)
-- ✅ **Strategy 4**: Forced assignment with warnings (allows rule violations)
+### 🧠 Intelligent Conflict Resolution
+- ✅ **Context-Aware Analysis**: AI considers 4-week schedule context for optimal decisions
+- ✅ **Multi-Strategy Approach**: AI → Algorithmic → Minimal fallback system
+- ✅ **Block Extension Prevention**: Never extends existing 3+ night blocks inappropriately
+- ✅ **Handoff Minimization**: Reduces custody transitions while maintaining fairness
 
-### Enhanced User Experience
-- ✅ **Intuitive calendar interface**: Click to select dates, hover for quick actions
-- ✅ **Real-time preview**: See schedule changes before applying
-- ✅ **Context menus**: Right-click for quick unavailability removal
-- ✅ **Mobile-first design**: Optimized for all device sizes
+### 🎯 Enhanced User Experience
+- ✅ **Footer Action Buttons**: Accept/Discard AI proposals directly in calendar footer
+- ✅ **Real-Time Validation**: Immediate feedback on AI proposals with detailed explanations
+- ✅ **Transparent Reasoning**: See exactly why AI made each scheduling decision
+- ✅ **Fallback Protection**: System automatically falls back to algorithmic approach if AI fails
 
 ## 🔒 Security & Privacy
 
