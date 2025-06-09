@@ -270,7 +270,7 @@ export class StorageManager {
   /**
    * Save or update a note for a specific date
    */
-  async saveNote(date: string, note: string): Promise<void> {
+  async saveNote(date: string, note: any): Promise<void> {
     try {
       const schedule = await this.loadSchedule();
       if (!schedule) {
@@ -289,7 +289,7 @@ export class StorageManager {
 
       const updatedEntry = {
         ...entry,
-        note: note.trim(),
+        note: note,
       };
 
       const updatedSchedule = {
@@ -596,6 +596,52 @@ export class StorageManager {
     } catch (error) {
       console.error('Error undoing change:', error);
       return { success: false, error: 'Failed to undo change' };
+    }
+  }
+
+  /**
+   * Revert a specific change by ID
+   */
+  async revertChange(historyId: string): Promise<boolean> {
+    try {
+      const history = await this.loadChangeHistory();
+      const changeIndex = history.entries.findIndex(entry => entry.id === historyId);
+      
+      if (changeIndex === -1) {
+        console.error('Change not found:', historyId);
+        return false;
+      }
+
+      const changeToRevert = history.entries[changeIndex];
+      const schedule = await this.loadSchedule();
+      if (!schedule) {
+        console.error('No schedule data found');
+        return false;
+      }
+
+      // Restore the previous state for this specific change
+      const updatedSchedule = {
+        ...schedule,
+        entries: {
+          ...schedule.entries,
+          ...changeToRevert.previousEntries
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      // Save the restored schedule
+      await this.saveSchedule(updatedSchedule);
+
+      // Remove the reverted change from history
+      history.entries.splice(changeIndex, 1);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.changeHistoryKey, JSON.stringify(history));
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error reverting change:', error);
+      return false;
     }
   }
 

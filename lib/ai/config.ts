@@ -40,7 +40,7 @@ export const aiConfig = {
     patternLearningEnabled: process.env.AI_PATTERNS_ENABLED !== 'false',
     explanationsEnabled: process.env.AI_EXPLANATIONS_ENABLED !== 'false',
     optimizationEnabled: process.env.AI_OPTIMIZATION_ENABLED !== 'false',
-    vectorSearchEnabled: process.env.AI_VECTOR_SEARCH_ENABLED !== 'false',
+    vectorSearchEnabled: process.env.AI_VECTOR_SEARCH_ENABLED === 'true',
   },
 
   // Cache Configuration
@@ -82,14 +82,14 @@ export function validateAIConfig(): { valid: boolean; errors: string[] } {
     errors.push('OPENAI_API_KEY is required');
   }
 
-  // Supabase and Blob are optional for basic AI functionality
-  // Only warn if features requiring them are enabled
-  if (aiConfig.features.vectorSearchEnabled && !aiConfig.supabase.url) {
-    errors.push('NEXT_PUBLIC_SUPABASE_URL is required when vector search is enabled');
-  }
-
-  if (aiConfig.features.vectorSearchEnabled && !aiConfig.supabase.anonKey) {
-    errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is required when vector search is enabled');
+  // Only require Supabase if vector search is actually enabled
+  if (aiConfig.features.vectorSearchEnabled) {
+    if (!aiConfig.supabase.url) {
+      errors.push('NEXT_PUBLIC_SUPABASE_URL is required when vector search is enabled');
+    }
+    if (!aiConfig.supabase.anonKey) {
+      errors.push('NEXT_PUBLIC_SUPABASE_ANON_KEY is required when vector search is enabled');
+    }
   }
 
   return {

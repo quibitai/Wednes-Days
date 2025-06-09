@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
-import { History, Clock, User, Calendar, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { History, Clock, User, Calendar, X, ChevronDown, ChevronUp, Undo } from 'lucide-react';
 import { StorageManager } from '@/lib/storage/storageManager';
 import type { ChangeHistoryEntry } from '@/types';
 
 interface HistoryPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  onRevert?: (historyId: string) => Promise<void>;
 }
 
-export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
+export default function HistoryPanel({ isOpen, onClose, onRevert }: HistoryPanelProps) {
   const [historyEntries, setHistoryEntries] = useState<ChangeHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [revertingId, setRevertingId] = useState<string | null>(null);
   const storageManager = new StorageManager();
 
   // Load change history when panel opens
@@ -23,6 +25,7 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
       setIsLoading(true);
       try {
         const history = await storageManager.loadChangeHistory();
+        console.log('Loaded history:', history); // Debug log
         setHistoryEntries(history?.entries || []);
       } catch (error) {
         console.error('Error loading change history:', error);
@@ -68,6 +71,23 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
       return 'border-l-green-500 bg-green-50 dark:bg-green-900/10';
     }
     return 'border-l-gray-500 bg-gray-50 dark:bg-gray-900/10';
+  };
+
+  const handleRevert = async (historyId: string) => {
+    if (!onRevert) return;
+
+    setRevertingId(historyId);
+    try {
+      await onRevert(historyId);
+      // Reload history after successful revert
+      const history = await storageManager.loadChangeHistory();
+      setHistoryEntries(history?.entries || []);
+    } catch (error) {
+      console.error('Error reverting change:', error);
+      alert('Failed to revert change. Please try again.');
+    } finally {
+      setRevertingId(null);
+    }
   };
 
   if (!isOpen) return null;
@@ -132,6 +152,19 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
                         </div>
                       </div>
                     </div>
+                    {onRevert && (
+                      <div className="flex-shrink-0 ml-3">
+                        <button
+                          onClick={() => handleRevert(entry.id)}
+                          disabled={revertingId === entry.id}
+                          className="inline-flex items-center space-x-1 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Revert this change"
+                        >
+                          <Undo className="h-3 w-3" />
+                          <span>{revertingId === entry.id ? 'Reverting...' : 'Revert'}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

@@ -6,10 +6,19 @@ import type {
   AppConfig 
 } from '@/types';
 import { AutoRebalanceService } from './autoRebalanceService';
+import type { AIRebalanceRequest } from './aiRebalanceService';
 
 export class PreviewManager {
   private storageKey = 'custody-schedule-preview';
   private autoRebalanceService = new AutoRebalanceService();
+  private config: AppConfig | null = null;
+
+  /**
+   * Set configuration for AI requests
+   */
+  setConfig(config: AppConfig): void {
+    this.config = config;
+  }
 
   /**
    * Load the current preview state
@@ -79,6 +88,107 @@ export class PreviewManager {
 
     this.savePreview(updated);
     return updated;
+  }
+
+  /**
+   * Generate AI-powered proposals based on unavailable days
+   */
+  async generateAIProposals(preview: SchedulePreview): Promise<SchedulePreview> {
+    const updated = { ...preview };
+    
+    // Reset proposals
+    updated.proposed = {};
+
+    // If no unavailable days, nothing to do
+    const unavailableDays = Object.keys(preview.unavailable);
+    if (unavailableDays.length === 0) {
+      this.savePreview(updated);
+      return updated;
+    }
+
+    if (!this.config) {
+      console.warn('No config set for AI proposals, falling back to algorithmic approach');
+      return this.generateProposals(preview);
+    }
+
+    try {
+      // For now, handle the first unavailable day (can be extended for multiple days)
+      const firstUnavailableDate = unavailableDays[0];
+      const unavailablePerson = preview.unavailable[firstUnavailableDate];
+
+      // Build context window (4 weeks around the unavailable date)
+      const unavailableDateTime = new Date(firstUnavailableDate);
+      const windowStart = new Date(unavailableDateTime.getTime() - 14 * 24 * 60 * 60 * 1000); // 2 weeks before
+      const windowEnd = new Date(unavailableDateTime.getTime() + 14 * 24 * 60 * 60 * 1000); // 2 weeks after
+
+      const aiRequest: AIRebalanceRequest = {
+        currentSchedule: preview.current,
+        unavailableDate: firstUnavailableDate,
+        unavailablePerson,
+        config: this.config,
+        context: {
+          windowStart: windowStart.toISOString().split('T')[0],
+          windowEnd: windowEnd.toISOString().split('T')[0],
+          currentHandoffCount: this.countHandoffs(preview.current),
+          recentChanges: []
+        },
+        preferences: {
+          minimizeHandoffs: true,
+          preferLongerBlocks: true,
+          maintainFairness: true,
+          maxChangesAllowed: 5
+        }
+      };
+
+      const response = await fetch('/api/ai/rebalance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(aiRequest)
+      });
+
+      if (response.ok) {
+        const aiResult = await response.json();
+        if (aiResult.success && aiResult.proposedSchedule) {
+          // Find what changed from the original
+          for (const [date, proposedEntry] of Object.entries(aiResult.proposedSchedule as Record<string, ScheduleEntry>)) {
+            const originalEntry = preview.current[date];
+            if (originalEntry && proposedEntry && originalEntry.assignedTo !== proposedEntry.assignedTo) {
+              updated.proposed[date] = proposedEntry;
+            }
+          }
+        } else {
+          throw new Error('AI proposal failed');
+        }
+      } else {
+        throw new Error('AI API request failed');
+      }
+    } catch (error) {
+      console.error('Error generating AI proposals, falling back to algorithmic approach:', error);
+      return this.generateProposals(preview);
+    }
+
+    updated.hasUnsavedChanges = true;
+    this.savePreview(updated);
+    return updated;
+  }
+
+  /**
+   * Count handoffs in a schedule (helper method)
+   */
+  private countHandoffs(schedule: Record<string, ScheduleEntry>): number {
+    const dates = Object.keys(schedule).sort();
+    let handoffs = 0;
+    
+    for (let i = 1; i < dates.length; i++) {
+      const prevEntry = schedule[dates[i - 1]];
+      const currEntry = schedule[dates[i]];
+      
+      if (prevEntry && currEntry && prevEntry.assignedTo !== currEntry.assignedTo) {
+        handoffs++;
+      }
+    }
+    
+    return handoffs;
   }
 
   /**

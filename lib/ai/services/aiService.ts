@@ -322,12 +322,22 @@ export class AIService {
     
     unavailableDates.forEach(date => {
       if (optimizedSchedule[date]) {
+        const currentEntry = optimizedSchedule[date];
+        const currentNoteContent = currentEntry.note?.content || '';
+        const adjustmentMessage = 'Adjusted for unavailability';
+        const newNoteContent = currentNoteContent 
+          ? `${currentNoteContent} (${adjustmentMessage})`
+          : adjustmentMessage;
+
         optimizedSchedule[date] = {
-          ...optimizedSchedule[date],
-          assignedTo: optimizedSchedule[date].assignedTo === 'personA' ? 'personB' : 'personA',
-          note: optimizedSchedule[date].note ? 
-            `${optimizedSchedule[date].note} (Adjusted for unavailability)` : 
-            'Adjusted for unavailability'
+          ...currentEntry,
+          assignedTo: currentEntry.assignedTo === 'personA' ? 'personB' : 'personA',
+          note: {
+            content: newNoteContent,
+            authorId: 'personA', // System generated
+            authorName: 'System',
+            timestamp: new Date().toISOString()
+          }
         };
       }
     });

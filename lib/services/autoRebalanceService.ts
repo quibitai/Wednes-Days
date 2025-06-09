@@ -40,13 +40,16 @@ export class AutoRebalanceService {
         };
       }
 
-      // Get all dates and group by week
+      // Get all dates and group by fortnight (14-day periods) instead of weekly
       const dates = Object.keys(workingSchedule).sort();
-      const weeklyGroups = this.groupDatesByWeek(dates);
+      const fortnightlyGroups = this.groupDatesByFortnight(dates);
       
-      // Rebalance each week individually
-      for (const weekDates of weeklyGroups) {
-        this.rebalanceWeek(workingSchedule, weekDates, unavailableDate, unavailablePerson);
+      // Create single unavailable day record for the fortnight logic
+      const unavailableDays = { [unavailableDate]: unavailablePerson };
+      
+      // Rebalance each fortnight individually using the advanced algorithm
+      for (const fortnightDates of fortnightlyGroups) {
+        this.rebalanceFortnight(workingSchedule, fortnightDates, unavailableDays);
       }
 
       // Count changes and final stats
@@ -62,7 +65,7 @@ export class AutoRebalanceService {
           personADays: finalStats.personA,
           personBDays: finalStats.personB,
           handoffCount,
-          improvementReason: `Rebalanced to target ${this.TARGET_DAYS_PER_WEEK} nights per person per week`
+          improvementReason: `Rebalanced using fortnightly periods to target 6-8 nights per person per fortnight, avoiding single-day assignments`
         }
       };
 
@@ -165,9 +168,12 @@ export class AutoRebalanceService {
     // Find days we can swap (not unavailable, assigned to overAssigned person)
     const swapCandidates = weekDates.filter(date => {
       const entry = schedule[date];
+      const isTargetPersonBlocked = entry?.informationalUnavailability?.[underAssigned];
+      
       return entry && 
              entry.assignedTo === overAssigned && 
              !entry.isUnavailable &&
+             !isTargetPersonBlocked && // Don't assign to someone who blocked this day
              date !== unavailableDate; // Don't touch the unavailable date
     });
 
@@ -222,9 +228,12 @@ export class AutoRebalanceService {
     // Find days we can swap (not unavailable, assigned to overAssigned person)
     const swapCandidates = weekDates.filter(date => {
       const entry = schedule[date];
+      const isTargetPersonBlocked = entry?.informationalUnavailability?.[underAssigned];
+      
       return entry && 
              entry.assignedTo === overAssigned && 
              !entry.isUnavailable &&
+             !isTargetPersonBlocked && // Don't assign to someone who blocked this day
              !unavailableDays[date]; // Don't touch any unavailable dates
     });
 
@@ -284,7 +293,7 @@ export class AutoRebalanceService {
       const prevDate = allDates[dateIndex - 1];
       const prevEntry = schedule[prevDate];
       if (prevEntry && prevEntry.assignedTo === targetPerson) {
-        score += 2; // Bonus for creating consecutive days
+        score += 3; // Higher bonus for creating consecutive days
       }
     }
 
@@ -293,8 +302,52 @@ export class AutoRebalanceService {
       const nextDate = allDates[dateIndex + 1];
       const nextEntry = schedule[nextDate];
       if (nextEntry && nextEntry.assignedTo === targetPerson) {
-        score += 2; // Bonus for creating consecutive days
+        score += 3; // Higher bonus for creating consecutive days
       }
+    }
+
+    // Extra bonus for connecting two existing blocks (bridging)
+    if (dateIndex > 0 && dateIndex < allDates.length - 1) {
+      const prevDate = allDates[dateIndex - 1];
+      const nextDate = allDates[dateIndex + 1];
+      const prevEntry = schedule[prevDate];
+      const nextEntry = schedule[nextDate];
+      
+      if (prevEntry && nextEntry && 
+          prevEntry.assignedTo === targetPerson && 
+          nextEntry.assignedTo === targetPerson) {
+        score += 5; // Big bonus for bridging two blocks
+      }
+    }
+
+    // Look ahead/behind for longer consecutive sequences
+    let consecutiveBefore = 0;
+    let consecutiveAfter = 0;
+    
+    // Count consecutive days before
+    for (let i = dateIndex - 1; i >= 0; i--) {
+      const checkEntry = schedule[allDates[i]];
+      if (checkEntry && checkEntry.assignedTo === targetPerson) {
+        consecutiveBefore++;
+      } else {
+        break;
+      }
+    }
+    
+    // Count consecutive days after
+    for (let i = dateIndex + 1; i < allDates.length; i++) {
+      const checkEntry = schedule[allDates[i]];
+      if (checkEntry && checkEntry.assignedTo === targetPerson) {
+        consecutiveAfter++;
+      } else {
+        break;
+      }
+    }
+    
+    // Bonus for creating longer blocks (exponential bonus)
+    const totalConsecutive = consecutiveBefore + consecutiveAfter + 1;
+    if (totalConsecutive >= 3) {
+      score += totalConsecutive * 2; // Exponential bonus for longer blocks
     }
 
     return score;

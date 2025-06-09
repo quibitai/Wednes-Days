@@ -11,7 +11,7 @@ export interface User {
 export interface ScheduleEntry {
   date: string; // ISO date string (YYYY-MM-DD)
   assignedTo: 'personA' | 'personB';
-  note?: string; // User-added note for this day
+  note?: Note;
   // Legacy fields for backward compatibility
   isUnavailable?: boolean; 
   unavailableBy?: 'personA' | 'personB';
@@ -22,6 +22,13 @@ export interface ScheduleEntry {
     personB?: boolean;
   };
   processedForRebalance?: boolean;
+}
+
+export interface Note {
+  content: string;
+  authorId: 'personA' | 'personB';
+  authorName: string;
+  timestamp: string; // ISO date string
 }
 
 export interface CustodySchedule {

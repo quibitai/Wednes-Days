@@ -12,7 +12,7 @@ import {
   isSameDay,
   isAfter
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, X, Ban, ArrowRightLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Ban, ArrowRightLeft, StickyNote, Shield } from 'lucide-react';
 import Image from 'next/image';
 import type { SchedulePreview, AppConfig } from '@/types';
 import { hexToRgba } from '@/lib/colors';
@@ -26,6 +26,10 @@ interface PreviewCalendarProps {
   onMarkUnavailable: (date: string, personId: 'personA' | 'personB') => void;
   onRemoveUnavailable: (date: string) => void;
   onManualAdjustment: (date: string, newAssignment: 'personA' | 'personB') => void;
+  onDayDetailClick?: (date: string) => void;
+  onToggleInformationalUnavailability?: (date: string, personId: 'personA' | 'personB') => void;
+  onAcceptChanges?: () => void;
+  onDiscardChanges?: () => void;
 }
 
 export default function PreviewCalendar({
@@ -37,6 +41,10 @@ export default function PreviewCalendar({
   onMarkUnavailable,
   onRemoveUnavailable,
   onManualAdjustment,
+  onDayDetailClick,
+  onToggleInformationalUnavailability,
+  onAcceptChanges,
+  onDiscardChanges,
 }: PreviewCalendarProps) {
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const today = new Date();
@@ -74,6 +82,7 @@ export default function PreviewCalendar({
     const dateStr = format(date, 'yyyy-MM-dd');
     const isToday = format(date, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
     const isCurrentMonth = format(date, 'MM') === format(currentMonth, 'MM');
+    const isPast = !isAfter(date, new Date()) && !isSameDay(date, new Date());
     
     // Get effective assignment (considering all changes)
     const effectiveAssignment = preview.manual[dateStr]?.assignedTo || 
@@ -83,6 +92,9 @@ export default function PreviewCalendar({
     // Check if this date has changed
     const originalAssignment = preview.current[dateStr]?.assignedTo;
     const isChanged = originalAssignment && effectiveAssignment && originalAssignment !== effectiveAssignment;
+    
+    // Check if current user has blocked this day
+    const isBlockedByCurrentUser = preview.current[dateStr]?.informationalUnavailability?.[currentUser];
     
     // Determine change reason
     let changeReason: 'unavailable' | 'manual' | 'proposed' | null = null;
@@ -117,7 +129,7 @@ export default function PreviewCalendar({
     
     // Base classes for day cell
     let dayClasses = `
-      relative h-24 border border-gray-200 dark:border-gray-700 cursor-pointer
+      relative h-24 border border-gray-300 dark:border-gray-500 cursor-pointer
       transition-all duration-200 hover:shadow-md overflow-hidden
     `;
     
@@ -146,17 +158,61 @@ export default function PreviewCalendar({
       }
     }
 
+    const hasNote = !!preview.current[dateStr]?.note;
+
     return (
       <div
         key={dateStr}
-        className={dayClasses.trim()}
+        className={`border border-gray-300 dark:border-gray-500 min-h-[120px] p-2 relative group
+          cursor-pointer transition-colors
+          ${handoffInfo.isHandoff 
+            ? '' // No background classes for handoff days - use inline styles only
+            : `hover:bg-gray-50 dark:hover:bg-gray-800 ${isCurrentMonth ? 'bg-white dark:bg-gray-900' : 'bg-gray-100 dark:bg-gray-800 opacity-60'}`
+          }
+          ${isChanged ? 'border-dashed border-2 border-green-500' : ''}
+        `}
         style={dayStyle}
         onMouseEnter={() => setHoveredDate(dateStr)}
         onMouseLeave={() => setHoveredDate(null)}
+        onClick={() => onDayDetailClick?.(dateStr)}
       >
+        <div className="flex justify-between items-start mb-2 pointer-events-none">
+          <span className={`text-sm font-medium ${isToday ? 'text-blue-600' : 'text-gray-900 dark:text-gray-100'}`}>
+            {format(date, 'd')}
+          </span>
+        </div>
+
+        {/* Note Indicator */}
+        {hasNote && (
+          <div className="absolute bottom-2 right-2 pointer-events-none z-10">
+            <StickyNote className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
+          </div>
+        )}
+
+        {/* Today indicator - dog icon */}
+        {isToday && (
+          <div className="absolute top-1/2 left-1/4 transform -translate-x-1/2 -translate-y-1/2 z-20">
+            {/* The 'dark:' modifier with 'hidden' and 'block' can be used for theme-specific images */}
+            <Image
+              src="/dog-iconB.png"
+              alt="Today"
+              width={40}
+              height={40}
+              className="object-contain drop-shadow-lg dark:hidden"
+            />
+            <Image
+              src="/dog-iconW.png"
+              alt="Today"
+              width={40}
+              height={40}
+              className="object-contain drop-shadow-lg hidden dark:block"
+            />
+          </div>
+        )}
+
         {/* Handoff day split background */}
         {handoffInfo.isHandoff && (
-          <div className="absolute inset-0 flex">
+          <div className="absolute inset-0 flex pointer-events-none">
             {/* From person half */}
             <div 
               className="w-1/2 h-full"
@@ -172,27 +228,7 @@ export default function PreviewCalendar({
               }}
             />
             {/* Handoff dotted divider line */}
-            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 transform -translate-x-1/2 border-l-2 border-dotted border-gray-500 dark:border-gray-400" />
-          </div>
-        )}
-
-        {/* Date number */}
-        <div className={`absolute top-2 left-2 text-sm font-medium z-10 ${
-          !isCurrentMonth ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-100'
-        }`}>
-          {format(date, 'd')}
-        </div>
-
-        {/* Today indicator */}
-        {isToday && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20">
-            <Image
-              src="/dog-iconB.png"
-              alt="Today"
-              width={40}
-              height={40}
-              className="object-contain drop-shadow-lg"
-            />
+            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 transform -translate-x-1/2 border-l-2 border-dotted border-gray-500" />
           </div>
         )}
 
@@ -238,6 +274,28 @@ export default function PreviewCalendar({
         {/* Action buttons - show on hover for ALL days including overflow, or if unavailable */}
         {(hoveredDate === dateStr || preview.unavailable[dateStr]) && (
           <div className="absolute top-1 right-1 flex space-x-1 z-20">
+            {/* Block Day button - show for future dates when handler exists */}
+            {!isPast && onToggleInformationalUnavailability && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleInformationalUnavailability(dateStr, currentUser);
+                }}
+                className={`p-1 transition-colors pointer-events-auto ${
+                  isBlockedByCurrentUser
+                    ? 'text-orange-600 dark:text-orange-400' // Style for an already-blocked day
+                    : 'text-gray-400 dark:text-gray-500 hover:text-orange-500 dark:hover:text-orange-400'
+                }`}
+                title={
+                  isBlockedByCurrentUser
+                    ? "You have blocked this day. Click to unblock."
+                    : "Block this day (auto-scheduler will not assign it to you)."
+                }
+              >
+                <Shield className="h-4 w-4" />
+              </button>
+            )}
+            
             {/* Remove unavailable */}
             {preview.unavailable[dateStr] && (
               <button
@@ -245,7 +303,7 @@ export default function PreviewCalendar({
                   e.stopPropagation();
                   onRemoveUnavailable(dateStr);
                 }}
-                className="text-red-500 hover:text-red-600 transition-colors"
+                className="text-red-500 hover:text-red-600 transition-colors pointer-events-auto"
                 title="Remove unavailability"
               >
                 <X className="h-4 w-4" />
@@ -259,7 +317,7 @@ export default function PreviewCalendar({
                   e.stopPropagation();
                   onMarkUnavailable(dateStr, currentUser);
                 }}
-                className="text-red-500 hover:text-red-600 transition-colors"
+                className="text-red-500 hover:text-red-600 transition-colors pointer-events-auto"
                 title="Mark unavailable"
               >
                 <Ban className="h-4 w-4" />
@@ -277,7 +335,7 @@ export default function PreviewCalendar({
                     onManualAdjustment(dateStr, newAssignment);
                   }
                 }}
-                className="text-blue-500 hover:text-blue-600 transition-colors"
+                className="text-blue-500 hover:text-blue-600 transition-colors pointer-events-auto"
                 title="Switch assignment"
               >
                 <ArrowRightLeft className="h-4 w-4" />
@@ -308,12 +366,12 @@ export default function PreviewCalendar({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-500">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-500">
         <button
           onClick={() => onMonthChange(addDays(currentMonth, -30))}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors text-gray-600 dark:text-gray-400 pointer-events-auto"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
@@ -331,7 +389,7 @@ export default function PreviewCalendar({
       </div>
 
       {/* Days of week header */}
-      <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700">
+      <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-500">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
           <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 dark:text-gray-400">
             {day}
@@ -347,20 +405,44 @@ export default function PreviewCalendar({
       </div>
 
       {/* Legend */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-        <div className="flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-300">
-          <div className="flex items-center space-x-1">
-            <div className="w-3 h-3 border-2 border-red-400 border-dashed"></div>
-            <span>Unavailable</span>
+      <div className="p-4 border-t border-gray-200 dark:border-gray-500 bg-gray-50 dark:bg-gray-700/50">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-wrap gap-4 text-xs text-gray-600 dark:text-gray-300">
+            <div className="flex items-center space-x-1">
+              <Shield className="w-3 h-3 text-orange-500" />
+              <span>Block Day</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <Ban className="w-3 h-3 text-red-500" />
+              <span>Mark Unavailable</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <ArrowRightLeft className="w-3 h-3 text-blue-500" />
+              <span>Swap Assignment</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <StickyNote className="w-3 h-3 text-yellow-500" />
+              <span>Add Note</span>
+            </div>
           </div>
-          <div className="flex items-center space-x-1">
-            <div className="w-3 h-3 border-2 border-green-400"></div>
-            <span>Auto-suggested</span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <div className="w-3 h-3 border-2 border-blue-400"></div>
-            <span>Manual change</span>
-          </div>
+          
+          {/* Accept/Discard buttons - show when there are unsaved changes */}
+          {preview.hasUnsavedChanges && (
+            <div className="flex space-x-2">
+              <button
+                onClick={onDiscardChanges}
+                className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={onAcceptChanges}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors"
+              >
+                Accept
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

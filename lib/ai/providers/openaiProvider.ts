@@ -160,11 +160,23 @@ export class OpenAIProvider {
    * Parse natural language input into structured data
    */
   async parseNaturalLanguage(input: string, userId: string): Promise<AIResponse> {
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1; // 0-based, so add 1
+    
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
         role: 'system',
         content: `You are a custody scheduling assistant. Parse user requests into structured JSON.
         
+Current context: ${currentDate.toISOString().split('T')[0]} (${currentYear}-${currentMonth.toString().padStart(2, '0')})
+
+When parsing dates:
+- If user says "18th" or "June 18th" without a year, assume they mean the NEXT occurrence
+- If current date is June 2024, "June 18th" means June 18, 2025 (next occurrence)
+- If they mention a month that has passed this year, assume next year
+- Always return dates in YYYY-MM-DD format
+
 Return ONLY valid JSON in this format:
 {
   "action": "mark_unavailable" | "request_swap" | "optimize_schedule" | "explain_schedule",

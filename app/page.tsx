@@ -1,12 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, User, Settings, Sun, Moon, History } from 'lucide-react';
+import { Calendar as CalendarIcon, User, Settings, Sun, Moon, History, ChevronRight } from 'lucide-react';
 import Image from 'next/image';
-import Calendar from '@/components/Calendar';
 import PreviewCalendar from '@/components/PreviewCalendar';
-import ChangesPanel from '@/components/ChangesPanel';
-import CompareView from '@/components/CompareView';
 import ConfigurationPanel from '@/components/ConfigurationPanel';
 import ScheduleSummary from '@/components/ScheduleSummary';
 import DayDetailModal from '@/components/DayDetailModal';
@@ -21,7 +18,7 @@ import type {
   CustodySchedule, 
   AppConfig,
   SchedulePreview,
-  ScheduleChange
+  Note
 } from '@/types';
 
 const storageManager = new StorageManager();
@@ -41,18 +38,16 @@ export default function Home() {
   
   // Preview system state
   const [preview, setPreview] = useState<SchedulePreview | null>(null);
-  const [changes, setChanges] = useState<ScheduleChange[]>([]);
   
   // UI state
   const [showConfig, setShowConfig] = useState(false);
-  const [showCompare, setShowCompare] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [nlpInput, setNlpInput] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [showDayDetail, setShowDayDetail] = useState(false);
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [showHistory, setShowHistory] = useState(false);
+  const [showDayDetail, setShowDayDetail] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [nlpInput, setNlpInput] = useState('');
+  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
 
   // Load initial data
   useEffect(() => {
@@ -75,6 +70,11 @@ export default function Home() {
         setConfig(savedConfig);
         setSchedule(savedSchedule);
         
+        // Set config in preview manager for AI requests
+        if (savedConfig) {
+          previewManager.setConfig(savedConfig);
+        }
+        
         if (savedSchedule) {
           initializePreview(savedSchedule.entries);
         }
@@ -92,13 +92,6 @@ export default function Home() {
   const initializePreview = (currentSchedule: Record<string, any>) => {
     const newPreview = previewManager.initializePreview(currentSchedule);
     setPreview(newPreview);
-    setChanges([]);
-  };
-
-  // Update changes list when preview changes
-  const updateChanges = (updatedPreview: SchedulePreview) => {
-    const newChanges = previewManager.getChanges(updatedPreview);
-    setChanges(newChanges);
   };
 
   // Handle marking a day as unavailable
@@ -108,14 +101,11 @@ export default function Home() {
     try {
       setIsProcessing(true);
       
-      // Mark as unavailable
+      // Mark as unavailable and generate AI-powered proposals
       let updatedPreview = previewManager.markUnavailable(preview, date, personId);
-      
-      // Generate new proposals
-      updatedPreview = await previewManager.generateProposals(updatedPreview);
+      updatedPreview = await previewManager.generateAIProposals(updatedPreview);
       
       setPreview(updatedPreview);
-      updateChanges(updatedPreview);
     } catch (error) {
       console.error('Error marking unavailable:', error);
     } finally {
@@ -124,59 +114,35 @@ export default function Home() {
   };
 
   // Handle removing unavailability
-  const handleRemoveUnavailable = (date: string) => {
+  const handleRemoveUnavailable = async (date: string) => {
     if (!preview) return;
-
-    const updatedPreview = previewManager.removeUnavailable(preview, date);
-    setPreview(updatedPreview);
-    updateChanges(updatedPreview);
-  };
-
-  // Handle manual adjustment
-  const handleManualAdjustment = (date: string, newAssignment: 'personA' | 'personB') => {
-    if (!preview) return;
-
-    const updatedPreview = previewManager.makeManualAdjustment(preview, date, newAssignment);
-    setPreview(updatedPreview);
-    updateChanges(updatedPreview);
-  };
-
-  // Handle accepting all changes
-  const handleAcceptAll = async () => {
-    if (!preview || !schedule) return;
 
     try {
       setIsProcessing(true);
       
-      // Commit changes
-      const finalSchedule = previewManager.commitChanges(preview);
-      
-      // Update storage
-      const updatedSchedule = {
-        ...schedule,
-        entries: finalSchedule,
-        lastUpdated: new Date().toISOString()
-      };
-      
-      await storageManager.saveSchedule(updatedSchedule);
-      setSchedule(updatedSchedule);
-      
-      // Initialize new clean preview
-      initializePreview(finalSchedule);
-      
+      const updatedPreview = previewManager.removeUnavailable(preview, date);
+      setPreview(updatedPreview);
     } catch (error) {
-      console.error('Error accepting changes:', error);
+      console.error('Error removing unavailability:', error);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Handle discarding all changes
-  const handleDiscardAll = () => {
-    if (!schedule) return;
+  // Handle manual adjustment
+  const handleManualAdjustment = async (date: string, newAssignment: 'personA' | 'personB') => {
+    if (!preview) return;
 
-    previewManager.discardChanges();
-    initializePreview(schedule.entries);
+    try {
+      setIsProcessing(true);
+      
+      const updatedPreview = previewManager.makeManualAdjustment(preview, date, newAssignment);
+      setPreview(updatedPreview);
+    } catch (error) {
+      console.error('Error making manual adjustment:', error);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Handle schedule reset
@@ -188,7 +154,6 @@ export default function Home() {
         // Reset preview to clean state
         const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
         setPreview(newPreview);
-        setChanges([]);
       }
     } catch (error) {
       console.error('Error reloading after reset:', error);
@@ -200,6 +165,9 @@ export default function Home() {
     try {
       await storageManager.saveConfig(newConfig);
       setConfig(newConfig);
+      
+      // Update the preview manager with the new config
+      previewManager.setConfig(newConfig);
     } catch (error) {
       console.error('Error saving config:', error);
     }
@@ -275,55 +243,59 @@ export default function Home() {
     }
   };
 
-  // Handle natural language input processing
+  // Handle natural language input
   const handleNaturalLanguageInput = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nlpInput.trim() || !preview) return;
 
-    setIsProcessing(true);
     try {
+      setIsProcessing(true);
+      
+      console.log('Processing natural language input:', nlpInput);
+      
+      // Parse the natural language input
       const response = await fetch('/api/ai/parse', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input: nlpInput.trim(),
-          userId: currentUser,
-        }),
+          input: nlpInput,
+          userId: currentUser
+        })
       });
 
+      console.log('API response status:', response.status);
+
+      if (!response.ok) throw new Error('Failed to process natural language input');
+
       const result = await response.json();
-
-      if (result.success && result.data) {
-        // Process the structured data to update the schedule
-        const { action, dates, person } = result.data;
-
-        if (action === 'mark_unavailable' && dates) {
-          // Mark multiple dates as unavailable
-          for (const date of dates) {
-            const updatedPreview = previewManager.markUnavailable(preview, date, person || currentUser);
-            setPreview(updatedPreview);
-            updateChanges(updatedPreview);
-          }
-        } else if (action === 'manual_assignment' && dates && person) {
-          // Make manual assignments
-          for (const date of dates) {
-            const updatedPreview = previewManager.makeManualAdjustment(preview, date, person);
-            setPreview(updatedPreview);
-            updateChanges(updatedPreview);
-          }
-        }
-
-        // Clear the input on success
-        setNlpInput('');
-      } else {
-        console.error('AI parse failed:', result.error);
-        alert(`Could not understand command: ${result.error || 'Please try rephrasing your request.'}`);
+      console.log('API response:', result);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to parse natural language input');
       }
+
+      const { action, dates, person } = result.data || {};
+      console.log('Parsed action:', { action, dates, person });
+
+      // Apply the parsed action to preview
+      let updatedPreview = preview;
+
+      if (action === 'mark_unavailable' && dates && person) {
+        for (const date of dates) {
+          updatedPreview = previewManager.markUnavailable(updatedPreview, date, person || currentUser);
+          updatedPreview = await previewManager.generateAIProposals(updatedPreview);
+        }
+      } else if (action === 'manual_assignment' && dates && person) {
+        for (const date of dates) {
+          updatedPreview = previewManager.makeManualAdjustment(updatedPreview, date, person);
+        }
+      }
+
+      setPreview(updatedPreview);
+      setNlpInput('');
     } catch (error) {
       console.error('Error processing natural language input:', error);
-      alert('Error processing command. Please try again.');
+      alert('Error: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsProcessing(false);
     }
@@ -331,6 +303,7 @@ export default function Home() {
 
   // Handle day detail modal
   const handleDayDetailClick = (date: string) => {
+    console.log('Day clicked:', date); // Debug log
     setSelectedDate(date);
     setShowDayDetail(true);
   };
@@ -340,19 +313,27 @@ export default function Home() {
     setSelectedDate(null);
   };
 
-  const handleSaveNote = async (date: string, note: string) => {
-    if (!preview) return;
-    
+  const handleSaveNote = async (date: string, noteContent: string) => {
+    if (!config) return;
+
     try {
-      await storageManager.saveNote(date, note);
-      // Reload the schedule to show the updated note
+      const newNote: Note = {
+        content: noteContent,
+        authorId: currentUser,
+        authorName: config[currentUser].name,
+        timestamp: new Date().toISOString(),
+      };
+      
+      await storageManager.saveNote(date, newNote);
+      
+      // Reload schedule to show updated note
       const loadedSchedule = await storageManager.loadSchedule();
       if (loadedSchedule) {
         setSchedule(loadedSchedule);
-        // Reset preview to clean state with updated notes
-        const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
-        setPreview(newPreview);
-        setChanges([]);
+        if (preview) {
+          const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
+          setPreview(newPreview);
+        }
       }
     } catch (error) {
       console.error('Error saving note:', error);
@@ -372,12 +353,133 @@ export default function Home() {
         // Reset preview to clean state with updated notes
         const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
         setPreview(newPreview);
-        setChanges([]);
       }
     } catch (error) {
       console.error('Error deleting note:', error);
       alert('Failed to delete note. Please try again.');
     }
+  };
+
+  // Handle toggling day blocking (informational unavailability)
+  const handleToggleBlockDay = async (date: string, personId: 'personA' | 'personB') => {
+    if (!schedule) return;
+
+    try {
+      // Toggle the informational unavailability using the existing storage manager method
+      await storageManager.toggleInformationalUnavailability(date, personId);
+      
+      // Reload the schedule to show the updated block status
+      const loadedSchedule = await storageManager.loadSchedule();
+      if (loadedSchedule) {
+        setSchedule(loadedSchedule);
+        
+        // Update the preview if it exists
+        if (preview) {
+          const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
+          setPreview(newPreview);
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling day block:', error);
+      alert('Failed to toggle day block. Please try again.');
+    }
+  };
+
+  // Handle revert from history
+  const handleRevertChange = async (historyId: string) => {
+    try {
+      const reverted = await storageManager.revertChange(historyId);
+      if (reverted) {
+        // Reload the schedule to show reverted changes
+        const loadedSchedule = await storageManager.loadSchedule();
+        if (loadedSchedule) {
+          setSchedule(loadedSchedule);
+          // Reset preview to clean state
+          const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
+          setPreview(newPreview);
+        }
+      }
+    } catch (error) {
+      console.error('Error reverting change:', error);
+      throw error; // Re-throw to let HistoryPanel handle the error
+    }
+  };
+
+  // Test function to create sample history entries
+  const createTestHistory = async () => {
+    try {
+      if (!schedule) return;
+      
+      // Get a date that exists in the schedule
+      const testDate = Object.keys(schedule.entries)[0];
+      if (!testDate) return;
+      
+      console.log('Creating test history entry for date:', testDate);
+      
+      // Use the switchDayAssignmentWithHistory method to create a test history entry
+      await storageManager.switchDayAssignmentWithHistory(testDate, currentUser);
+      
+      // Reload the schedule
+      const loadedSchedule = await storageManager.loadSchedule();
+      if (loadedSchedule) {
+        setSchedule(loadedSchedule);
+        // Reset preview to clean state
+        const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
+        setPreview(newPreview);
+      }
+      
+      console.log('Test history entry created successfully');
+    } catch (error) {
+      console.error('Error creating test history:', error);
+    }
+  };
+
+  // Handle accepting all changes
+  const handleAcceptChanges = async () => {
+    if (!preview || !schedule) return;
+
+    try {
+      setIsProcessing(true);
+      
+      // Commit changes
+      const finalSchedule = previewManager.commitChanges(preview);
+      
+      // Get the changes that were made
+      const changedEntries: Record<string, any> = {};
+      Object.keys(finalSchedule).forEach(date => {
+        if (JSON.stringify(finalSchedule[date]) !== JSON.stringify(schedule.entries[date])) {
+          changedEntries[date] = finalSchedule[date];
+        }
+      });
+
+      // Save changes with history tracking if there are any changes
+      if (Object.keys(changedEntries).length > 0) {
+        await storageManager.bulkUpdateScheduleWithHistory(
+          changedEntries,
+          'bulk_update',
+          `Applied ${Object.keys(changedEntries).length} schedule changes`,
+          currentUser
+        );
+      }
+      
+      // Reload and reset preview
+      const loadedSchedule = await storageManager.loadSchedule();
+      if (loadedSchedule) {
+        setSchedule(loadedSchedule);
+        initializePreview(loadedSchedule.entries);
+      }
+      
+    } catch (error) {
+      console.error('Error accepting changes:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle discarding all changes
+  const handleDiscardChanges = () => {
+    if (!schedule) return;
+    initializePreview(schedule.entries);
   };
 
   if (isLoading) {
@@ -456,13 +558,19 @@ export default function Home() {
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
                 Wednes' Days
               </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Custody Schedule Management
-              </p>
             </div>
           </div>
           
           <div className="flex items-center space-x-3">
+            {/* History */}
+            <button
+              onClick={() => setShowHistory(true)}
+              className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+              title="View change history"
+            >
+              <History className="h-5 w-5" />
+            </button>
+
             {/* View Toggle */}
             {schedule && (
               <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
@@ -491,7 +599,7 @@ export default function Home() {
 
             {/* User Toggle */}
             {config && (
-              <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-500">
                 <button
                   onClick={() => setCurrentUser('personA')}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
@@ -533,99 +641,68 @@ export default function Home() {
             >
               <Settings className="h-5 w-5" />
             </button>
-
-            {/* History */}
-            <button
-              onClick={() => setShowHistory(true)}
-              className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-              title="View change history"
-            >
-              <History className="h-5 w-5" />
-            </button>
           </div>
         </div>
 
-        {/* Main Content */}
+        {/* Main Content - Full Width */}
         {schedule && config && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="w-full">
             {/* Calendar/List View */}
-            <div className="lg:col-span-3">
-              {viewMode === 'calendar' ? (
-                <>
-                  {/* Preview Calendar when available */}
-                  {preview ? (
-                    <PreviewCalendar
-                      preview={preview}
-                      config={config}
-                      currentUser={currentUser}
-                      currentMonth={currentMonth}
-                      onMonthChange={handleMonthChange}
-                      onMarkUnavailable={handleMarkUnavailable}
-                      onRemoveUnavailable={handleRemoveUnavailable}
-                      onManualAdjustment={handleManualAdjustment}
-                    />
-                  ) : (
-                    <Calendar
-                      schedule={schedule}
-                      config={config}
-                      currentUser={currentUser}
-                      currentMonth={currentMonth}
-                      onMonthChange={handleMonthChange}
-                      preview={preview}
-                      onMarkUnavailable={handleMarkUnavailable}
-                      onRemoveUnavailable={handleRemoveUnavailable}
-                      onManualAdjustment={handleManualAdjustment}
-                      onDayDetailClick={handleDayDetailClick}
-                    />
-                  )}
-                </>
-              ) : (
-                <HandoffList
-                  schedule={schedule}
+            {viewMode === 'calendar' ? (
+              preview && (
+                <PreviewCalendar
+                  preview={preview}
                   config={config}
+                  currentUser={currentUser}
+                  currentMonth={currentMonth}
+                  onMonthChange={handleMonthChange}
+                  onMarkUnavailable={handleMarkUnavailable}
+                  onRemoveUnavailable={handleRemoveUnavailable}
+                  onManualAdjustment={handleManualAdjustment}
+                  onDayDetailClick={handleDayDetailClick}
+                  onToggleInformationalUnavailability={handleToggleBlockDay}
+                  onAcceptChanges={handleAcceptChanges}
+                  onDiscardChanges={handleDiscardChanges}
                 />
-              )}
-            </div>
+              )
+            ) : (
+              <HandoffList
+                schedule={schedule}
+                config={config}
+                onDayDetailClick={handleDayDetailClick}
+              />
+            )}
 
-            {/* Sidebar */}
-            <div className="lg:col-span-1 space-y-6">
-              {/* Sidebar content can go here in the future */}
-            </div>
+
           </div>
         )}
 
         {/* Natural Language Input - Show when preview system is active */}
         {preview && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
-              🤖 Smart Commands
-            </h3>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-500 p-4">
             <form onSubmit={handleNaturalLanguageInput} className="space-y-3">
               <div>
                 <label htmlFor="nlp-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Tell me what you'd like to change:
                 </label>
-                <input
-                  id="nlp-input"
-                  type="text"
-                  value={nlpInput}
-                  onChange={(e) => setNlpInput(e.target.value)}
-                  placeholder="e.g., 'Mark me unavailable July 15-17' or 'Give Adam custody on July 20'"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
-                  disabled={isProcessing}
-                />
-              </div>
-              <div className="flex justify-between items-center">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Natural language commands are processed by AI. Speak naturally!
-                </p>
-                <button
-                  type="submit"
-                  disabled={!nlpInput.trim() || isProcessing}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                >
-                  {isProcessing ? 'Processing...' : 'Execute'}
-                </button>
+                <div className="flex space-x-2">
+                  <input
+                    id="nlp-input"
+                    type="text"
+                    value={nlpInput}
+                    onChange={(e) => setNlpInput(e.target.value)}
+                    placeholder="e.g., 'Mark me unavailable July 15-17' or 'Give Adam custody on July 20'"
+                    className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                    disabled={isProcessing}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!nlpInput.trim() || isProcessing}
+                    className="p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -638,31 +715,6 @@ export default function Home() {
             schedule={schedule}
             config={config}
             currentMonth={currentMonth}
-          />
-        )}
-
-        {/* Changes Panel - Show when there are pending changes */}
-        {preview && preview.hasUnsavedChanges && (
-          <ChangesPanel
-            preview={preview}
-            changes={changes}
-            config={config}
-            onAcceptAll={handleAcceptAll}
-            onDiscardAll={handleDiscardAll}
-            onShowCompare={() => setShowCompare(true)}
-            isProcessing={isProcessing}
-          />
-        )}
-
-        {/* Compare View Modal */}
-        {showCompare && preview && (
-          <CompareView
-            preview={preview}
-            changes={changes}
-            config={config}
-            onClose={() => setShowCompare(false)}
-            onAcceptAll={handleAcceptAll}
-            onDiscardAll={handleDiscardAll}
           />
         )}
 
@@ -685,17 +737,6 @@ export default function Home() {
           config={config}
           currentUser={currentUser}
           onClose={handleCloseDayDetail}
-          onSwitchDay={(date) => {
-            const currentEntry = schedule.entries[date];
-            if (currentEntry) {
-              const otherPerson = currentEntry.assignedTo === 'personA' ? 'personB' : 'personA';
-              handleManualAdjustment(date, otherPerson);
-            }
-          }}
-          onToggleInformationalUnavailability={(date, personId) => {
-            // Handle informational unavailability toggle
-            console.log('Toggle informational unavailability:', date, personId);
-          }}
           onSaveNote={handleSaveNote}
           onDeleteNote={handleDeleteNote}
         />
@@ -705,6 +746,7 @@ export default function Home() {
       <HistoryPanel
         isOpen={showHistory}
         onClose={() => setShowHistory(false)}
+        onRevert={handleRevertChange}
       />
     </div>
   );

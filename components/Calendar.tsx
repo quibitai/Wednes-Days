@@ -13,7 +13,7 @@ import {
   isAfter,
   parseISO
 } from 'date-fns';
-import { ChevronLeft, ChevronRight, Clock, User, X, Check, Trash2, Ban, AlertTriangle, Calendar as CalendarIcon, ArrowRightLeft, StickyNote, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, User, X, Check, Trash2, Ban, AlertTriangle, Calendar as CalendarIcon, ArrowRightLeft, StickyNote, Shield } from 'lucide-react';
 import Image from 'next/image';
 import type { CustodySchedule, AppConfig, ScheduleEntry } from '@/types';
 import { hexToRgba } from '@/lib/colors';
@@ -345,7 +345,7 @@ export default function Calendar({
     const displayPerson = entry ? (hasPreviewChange || entry.assignedTo) : null;
     const isAdjusted = entry?.isAdjusted && !hasPreviewChange;
     const isUnavailable = entry?.isUnavailable;
-    const hasNote = entry?.note && entry.note.trim().length > 0;
+    const hasNote = !!entry?.note;
     // Make overflow dates clickable too, only restrict past dates
     const isClickable = !isPast && onDateClick;
 
@@ -355,11 +355,15 @@ export default function Calendar({
     // Check if tooltip should be visible (hover or manually activated)
     // Make sure we have an entry and it's not a past date
     const isTooltipVisible = Boolean(entry && !isPast && (isHovered || activeTooltip === dateStr));
+
+    // Check if current user has blocked this day
+    const isBlockedByCurrentUser = entry?.informationalUnavailability?.[currentUser];
     
     // Base day styling  
     let dayClasses = `
-      relative min-h-[80px] border-2 transition-all duration-200 font-normal
-      ${isClickable ? 'cursor-pointer hover:shadow-lg' : 'cursor-not-allowed'}
+      border border-gray-300 dark:border-gray-500 min-h-[120px] p-2 relative
+      transition-all duration-300 cursor-pointer hover:shadow-md group
+      ${isCurrentMonth ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-800 opacity-70'}
     `;
 
     let dayStyle: React.CSSProperties = {};
@@ -394,7 +398,7 @@ export default function Calendar({
     } else if (isUnavailable) {
       dayClasses += ' border-red-400 border-dashed';
     } else {
-      dayClasses += ' border-gray-200 dark:border-gray-700';
+      dayClasses += ' border-gray-200 dark:border-gray-500';
     }
 
     // Opacity for overflow days and past dates
@@ -412,38 +416,51 @@ export default function Calendar({
     return (
       <div
         key={dateStr}
-        className={dayClasses.trim()}
-        style={dayStyle}
-        onClick={(e) => isClickable && onDateClick(dateStr, e)}
-        onContextMenu={(e) => entry && handleRightClick(e, dateStr, entry)}
-        onMouseEnter={() => {
-          setHoveredDate(dateStr);
-          // Close any active manual tooltip when hovering a different day
-          if (activeTooltip && activeTooltip !== dateStr) {
-            setActiveTooltip(null);
-          }
-        }}
-        onMouseLeave={() => {
-          setHoveredDate(null);
-          setTooltipPosition(null);
+        className={dayClasses}
+        onClick={() => {
+          console.log('Calendar day clicked:', dateStr, 'onDayDetailClick:', !!onDayDetailClick);
+          console.log('Date object:', date, 'Entry exists:', !!entry);
+          console.log('Is current month:', isCurrentMonth, 'Is past:', isPast);
+          onDayDetailClick?.(dateStr);
         }}
       >
+        {/* Day number */}
+        <div className="flex justify-between items-start mb-2 pointer-events-none">
+          <span className={`text-sm font-medium ${isToday ? 'text-blue-600' : 'text-gray-900 dark:text-gray-100'}`}>
+            {date.getDate()}
+          </span>
+        </div>
+        
+        {/* Note Indicator */}
+        {hasNote && (
+            <div className="absolute bottom-2 right-2 pointer-events-none">
+                <StickyNote className="h-4 w-4 text-yellow-500 dark:text-yellow-400" />
+            </div>
+        )}
+
         {/* Today indicator - dog icon */}
         {isToday && (
-          <div className="absolute top-1/2 left-1/4 transform -translate-x-1/2 -translate-y-1/2 z-20">
+          <div className="absolute top-1/2 left-1/4 transform -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
             <Image
               src="/dog-iconB.png"
               alt="Today"
               width={40}
               height={40}
-              className="object-contain drop-shadow-lg"
+              className="object-contain drop-shadow-lg dark:hidden"
+            />
+            <Image
+              src="/dog-iconW.png"
+              alt="Today"
+              width={40}
+              height={40}
+              className="object-contain drop-shadow-lg hidden dark:block"
             />
           </div>
         )}
 
         {/* Handoff day split background */}
         {handoffInfo.isHandoff && !isPast && (
-          <div className="absolute inset-0 flex">
+          <div className="absolute inset-0 flex pointer-events-none">
             {/* From person half */}
             <div 
               className="w-1/2 h-full"
@@ -459,125 +476,13 @@ export default function Calendar({
               }}
             />
             {/* Handoff dotted divider line */}
-            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 transform -translate-x-1/2 border-l-2 border-dotted border-gray-500 dark:border-gray-400" />
-          </div>
-        )}
-
-        {/* Date number - muted for overflow dates, ensure normal font weight */}
-        <div className={`absolute top-2 left-2 text-sm font-medium z-10 ${
-          !isCurrentMonth ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-100'
-        }`}>
-          {format(date, 'd')}
-        </div>
-
-        {/* Action buttons - show for all days with entries, not just current month */}
-        {!isPast && entry && (
-          <div className="absolute top-1 right-1 flex space-x-1 z-10">
-            {/* Info/Detail button */}
-            {onDayDetailClick && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDayDetailClick(dateStr);
-                }}
-                className="p-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors shadow-sm"
-                title="View day details and notes"
-              >
-                <Info className="h-3 w-3" />
-              </button>
-            )}
-            
-            {/* Note indicator - moved to top area */}
-            {hasNote && (
-              <div className="p-1">
-                <StickyNote className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
-              </div>
-            )}
-            
-            {/* Switch button */}
-            {onSwitchDay && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSwitchDay(dateStr);
-                }}
-                className={`p-1 transition-colors ${
-                  isCurrentlyAdjusted 
-                    ? 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300' 
-                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400'
-                }`}
-                title={isCurrentlyAdjusted ? "Day has been switched - click to switch back" : "Switch assignment to other person"}
-              >
-                <ArrowRightLeft className="h-4 w-4" />
-              </button>
-            )}
-            
-            {/* Informational unavailability button */}
-            {onToggleInformationalUnavailability && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleInformationalUnavailability(dateStr, currentUser);
-                }}
-                className={`p-1 transition-colors ${
-                  entry.informationalUnavailability?.[currentUser]
-                    ? 'text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300'
-                    : 'text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400'
-                }`}
-                title={
-                  entry.informationalUnavailability?.[currentUser]
-                    ? "You marked yourself unavailable - click to remove"
-                    : "Mark yourself as unavailable (informational only)"
-                }
-              >
-                <Ban className="h-4 w-4" />
-              </button>
-            )}
-            
-            {/* Mark unavailable button (schedule-affecting) */}
-            {onMarkUnavailable && !entry.isUnavailable && entry.assignedTo === currentUser && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMarkUnavailable(dateStr, currentUser);
-                }}
-                className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                title="Mark unavailable (will trigger schedule rebalancing)"
-              >
-                <AlertTriangle className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Quick actions - show on hover for legacy unavailability removal */}
-        {isHovered && !isPast && entry && isUnavailable && onRemoveUnavailable && (
-          <div className="absolute top-1 left-1 z-10">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemoveUnavailable(dateStr);
-              }}
-              className="text-red-500 hover:text-red-600 transition-colors"
-              title="Remove unavailability"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
-        {/* Preview indicator */}
-        {hasPreviewChange && (
-          <div className="absolute top-1 right-1 z-10">
-            <div className="text-green-500">
-              <Clock className="h-4 w-4" />
-            </div>
+            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 transform -translate-x-1/2 border-l-2 border-dotted border-gray-500" />
           </div>
         )}
 
         {/* Person indicator and status - only show if there's an entry, muted for overflow */}
         {entry && displayPerson && (
-          <div className="absolute bottom-2 left-2 right-2 z-10">
+          <div className="absolute bottom-2 left-2 right-2 z-10 pointer-events-none">
             {handoffInfo.isHandoff ? (
               /* Handoff day - show both names */
               <div className="flex text-xs">
@@ -621,48 +526,86 @@ export default function Calendar({
                     <Ban className={`h-3 w-3 text-red-500 dark:text-red-400 ${!isCurrentMonth ? 'opacity-60' : ''}`} />
                   )}
                   
-                  {/* Info button - always show for entries, aligned with unavailability */}
-                  {!isPast && onDayDetailClick && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDayDetailClick(dateStr);
-                      }}
-                      className="p-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors shadow-sm"
-                      title="View day details and notes"
-                    >
-                      <Info className="h-3 w-3" />
-                    </button>
+                  {/* Blocked day indicator - show for current user */}
+                  {isBlockedByCurrentUser && (
+                    <div className="flex items-center space-x-1">
+                      <Shield className={`h-3 w-3 text-orange-500 dark:text-orange-400 ${!isCurrentMonth ? 'opacity-60' : ''}`} />
+                      <span className="text-xs text-orange-600 dark:text-orange-400">Blocked</span>
+                    </div>
                   )}
+
                 </div>
               </div>
             )}
           </div>
         )}
 
+        {/* Action buttons - show on hover for future dates */}
+        {!isPast && isHovered && (
+          <div className="absolute top-1 right-1 flex space-x-1 z-20">
+            {/* Block Day button - always show for future dates when handler exists */}
+            {onToggleInformationalUnavailability && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleInformationalUnavailability(dateStr, currentUser);
+                }}
+                className={`p-1 transition-colors pointer-events-auto ${
+                  isBlockedByCurrentUser
+                    ? 'text-orange-600 dark:text-orange-400' // Style for an already-blocked day
+                    : 'text-gray-400 dark:text-gray-500 hover:text-orange-500 dark:hover:text-orange-400'
+                }`}
+                title={
+                  isBlockedByCurrentUser
+                    ? "You have blocked this day. Click to unblock."
+                    : "Block this day (auto-scheduler will not assign it to you)."
+                }
+              >
+                <Shield className="h-4 w-4" />
+              </button>
+            )}
+            
+            {/* Unavailable button - show only if day is currently unavailable */}
+            {isUnavailable && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Add unavailable removal logic here if needed
+                }}
+                className="p-1 transition-colors pointer-events-auto text-red-600 dark:text-red-400"
+                title="This day is marked unavailable"
+              >
+                <Ban className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Hover effect for clickable dates */}
         {isClickable && (
-          <div className="absolute inset-0 bg-black dark:bg-white bg-opacity-0 dark:bg-opacity-0 hover:bg-opacity-5 dark:hover:bg-opacity-5 transition-opacity duration-200 rounded z-0" />
+          <div className="absolute inset-0 bg-black dark:bg-white bg-opacity-0 dark:bg-opacity-0 hover:bg-opacity-5 dark:hover:bg-opacity-5 transition-opacity duration-200 rounded z-0 pointer-events-none" />
         )}
 
         {/* Enhanced Tooltip - show for all dates with entries, not just current month */}
-        <DateTooltip 
-          entry={entry}
-          date={dateStr}
-          dateObj={date}
-          config={config}
-          schedule={schedule}
-          isVisible={isTooltipVisible}
-          onClose={activeTooltip === dateStr ? () => setActiveTooltip(null) : undefined}
-          handoffInfo={handoffInfo}
-          calendarStart={calendarStart}
-        />
+        <div className="pointer-events-none">
+          <DateTooltip 
+            entry={entry}
+            date={dateStr}
+            dateObj={date}
+            config={config}
+            schedule={schedule}
+            isVisible={isTooltipVisible}
+            onClose={activeTooltip === dateStr ? () => setActiveTooltip(null) : undefined}
+            handoffInfo={handoffInfo}
+            calendarStart={calendarStart}
+          />
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-500">
       {/* Context Menu */}
       {showContextMenu && (
         <>
@@ -671,7 +614,7 @@ export default function Calendar({
             onClick={() => setShowContextMenu(null)}
           />
           <div 
-            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg rounded-lg py-2 min-w-[160px]"
+            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-500 shadow-lg rounded-lg py-2 min-w-[160px]"
             style={{ 
               left: showContextMenu.x, 
               top: showContextMenu.y,
@@ -699,7 +642,7 @@ export default function Calendar({
       )}
 
       {/* Calendar Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-500">
         <button
           onClick={() => onMonthChange(addDays(currentMonth, -30))}
           className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-600 dark:text-gray-400"
@@ -736,7 +679,7 @@ export default function Calendar({
       )}
 
       {/* Days of Week Header */}
-      <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700">
+      <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-500">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
           <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 dark:text-gray-400">
             {day}
