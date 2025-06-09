@@ -99,13 +99,13 @@ export class AutoRebalanceService {
         }
       }
 
-      // Get all dates and group by week
+      // Get all dates and group by fortnight (14-day periods)
       const dates = Object.keys(workingSchedule).sort();
-      const weeklyGroups = this.groupDatesByWeek(dates);
+      const fortnightlyGroups = this.groupDatesByFortnight(dates);
       
-      // Rebalance each week individually
-      for (const weekDates of weeklyGroups) {
-        this.rebalanceWeekMultiple(workingSchedule, weekDates, unavailableDays);
+      // Rebalance each fortnight individually
+      for (const fortnightDates of fortnightlyGroups) {
+        this.rebalanceFortnight(workingSchedule, fortnightDates, unavailableDays);
       }
 
       // Count changes and final stats
@@ -121,7 +121,7 @@ export class AutoRebalanceService {
           personADays: finalStats.personA,
           personBDays: finalStats.personB,
           handoffCount,
-          improvementReason: `Rebalanced to target ${this.TARGET_DAYS_PER_WEEK} nights per person per week with ${Object.keys(unavailableDays).length} unavailable days`
+          improvementReason: `Rebalanced using fortnightly periods to target 6-8 nights per person per fortnight with ${Object.keys(unavailableDays).length} unavailable days`
         }
       };
 
@@ -407,5 +407,112 @@ export class AutoRebalanceService {
     }
     
     return changes;
+  }
+
+  /**
+   * Group dates into 14-day fortnightly periods
+   */
+  private groupDatesByFortnight(dates: string[]): string[][] {
+    const fortnights: string[][] = [];
+    for (let i = 0; i < dates.length; i += 14) {
+      fortnights.push(dates.slice(i, i + 14));
+    }
+    return fortnights;
+  }
+
+  /**
+   * Get custody statistics for a specific period of dates
+   */
+  private getPeriodStats(schedule: Record<string, ScheduleEntry>, periodDates: string[]): { personA: number; personB: number } {
+    const stats = { personA: 0, personB: 0 };
+    for (const date of periodDates) {
+      const entry = schedule[date];
+      if (entry) {
+        stats[entry.assignedTo]++;
+      }
+    }
+    return stats;
+  }
+
+  /**
+   * Rebalance a fortnight (14-day period) with advanced candidate vetting
+   */
+  private rebalanceFortnight(
+    schedule: Record<string, ScheduleEntry>,
+    fortnightDates: string[],
+    unavailableDays: Record<string, 'personA' | 'personB'>
+  ): void {
+    // Get current fortnightly distribution
+    const fortnightStats = this.getPeriodStats(schedule, fortnightDates);
+    
+    // Target: 6-8 days per person over 14 days (similar to 3-4 per week)
+    const targetMin = 6;
+    const targetMax = 8;
+    
+    // If fortnight is already balanced, no changes needed
+    if (fortnightStats.personA >= targetMin && fortnightStats.personA <= targetMax && 
+        fortnightStats.personB >= targetMin && fortnightStats.personB <= targetMax) {
+      return;
+    }
+
+    // Find who has too many/few days this fortnight
+    const overAssigned = fortnightStats.personA > targetMax ? 'personA' : 
+                        fortnightStats.personB > targetMax ? 'personB' : null;
+    
+    if (!overAssigned) return;
+    
+    const underAssigned = overAssigned === 'personA' ? 'personB' : 'personA';
+    
+    // Advanced candidate filtering with 1-day island prevention
+    const swapCandidates = fortnightDates.filter(date => {
+      const entry = schedule[date];
+      const isTargetPersonUnavailable = entry?.informationalUnavailability?.[underAssigned];
+
+      // Base conditions: Exclude invalid candidates
+      if (!entry || entry.assignedTo !== overAssigned || entry.isUnavailable || unavailableDays[date] || isTargetPersonUnavailable) {
+        return false;
+      }
+
+      // Logic to Avoid Creating 1-Day Islands
+      const dateIndex = fortnightDates.indexOf(date);
+      const prevDate = fortnightDates[dateIndex - 1];
+      const nextDate = fortnightDates[dateIndex + 1];
+      const isPrevDaySamePerson = schedule[prevDate]?.assignedTo === overAssigned;
+      const isNextDaySamePerson = schedule[nextDate]?.assignedTo === overAssigned;
+
+      // Prevents breaking a 2-day block, which would orphan the other day.
+      if (isPrevDaySamePerson && !isNextDaySamePerson) { // Part of a block ending here
+        const prevPrevDate = fortnightDates[dateIndex - 2];
+        if (schedule[prevPrevDate]?.assignedTo !== overAssigned) return false;
+      }
+      if (!isPrevDaySamePerson && isNextDaySamePerson) { // Part of a block starting here
+        const nextNextDate = fortnightDates[dateIndex + 2];
+        if (schedule[nextNextDate]?.assignedTo !== overAssigned) return false;
+      }
+
+      return true; // This is a valid candidate for swapping.
+    });
+
+    // Calculate how many swaps we need
+    const excessDays = Math.max(0, fortnightStats[overAssigned] - targetMax);
+    const neededDays = Math.max(0, targetMin - fortnightStats[underAssigned]);
+    const swapsNeeded = Math.min(excessDays, neededDays, swapCandidates.length);
+
+    // Perform swaps, preferring to create consecutive blocks
+    const sortedCandidates = this.sortCandidatesByHandoffReduction(
+      schedule, 
+      swapCandidates, 
+      fortnightDates, 
+      underAssigned
+    );
+
+    for (let i = 0; i < swapsNeeded; i++) {
+      const dateToSwap = sortedCandidates[i];
+      schedule[dateToSwap] = {
+        ...schedule[dateToSwap],
+        assignedTo: underAssigned,
+        originalAssignedTo: schedule[dateToSwap].originalAssignedTo || overAssigned
+      };
+    }
   }
 } 
