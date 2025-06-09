@@ -9,6 +9,7 @@ import ChangesPanel from '@/components/ChangesPanel';
 import CompareView from '@/components/CompareView';
 import ConfigurationPanel from '@/components/ConfigurationPanel';
 import ScheduleSummary from '@/components/ScheduleSummary';
+import DayDetailModal from '@/components/DayDetailModal';
 import { StorageManager } from '@/lib/storage/storageManager';
 import { PreviewManager } from '@/lib/services/previewManager';
 import { ScheduleGenerator } from '@/lib/services/scheduleGenerator';
@@ -46,6 +47,8 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [nlpInput, setNlpInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showDayDetail, setShowDayDetail] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -322,6 +325,57 @@ export default function Home() {
     }
   };
 
+  // Handle day detail modal
+  const handleDayDetailClick = (date: string) => {
+    setSelectedDate(date);
+    setShowDayDetail(true);
+  };
+
+  const handleCloseDayDetail = () => {
+    setShowDayDetail(false);
+    setSelectedDate(null);
+  };
+
+  const handleSaveNote = async (date: string, note: string) => {
+    if (!preview) return;
+    
+    try {
+      await storageManager.saveNote(date, note);
+      // Reload the schedule to show the updated note
+      const loadedSchedule = await storageManager.loadSchedule();
+      if (loadedSchedule) {
+        setSchedule(loadedSchedule);
+        // Reset preview to clean state with updated notes
+        const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
+        setPreview(newPreview);
+        setChanges([]);
+      }
+    } catch (error) {
+      console.error('Error saving note:', error);
+      alert('Failed to save note. Please try again.');
+    }
+  };
+
+  const handleDeleteNote = async (date: string) => {
+    if (!preview) return;
+    
+    try {
+      await storageManager.deleteNote(date);
+      // Reload the schedule to show the note removal
+      const loadedSchedule = await storageManager.loadSchedule();
+      if (loadedSchedule) {
+        setSchedule(loadedSchedule);
+        // Reset preview to clean state with updated notes
+        const newPreview = previewManager.resetToCleanState(loadedSchedule.entries);
+        setPreview(newPreview);
+        setChanges([]);
+      }
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      alert('Failed to delete note. Please try again.');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
@@ -464,6 +518,11 @@ export default function Home() {
             currentUser={currentUser}
             currentMonth={currentMonth}
             onMonthChange={handleMonthChange}
+            preview={preview}
+            onMarkUnavailable={handleMarkUnavailable}
+            onRemoveUnavailable={handleRemoveUnavailable}
+            onManualAdjustment={handleManualAdjustment}
+            onDayDetailClick={handleDayDetailClick}
           />
         )}
 
@@ -547,6 +606,30 @@ export default function Home() {
           />
         )}
       </div>
+
+      {/* Day Detail Modal */}
+      {showDayDetail && selectedDate && schedule && config && (
+        <DayDetailModal
+          date={selectedDate}
+          entry={schedule.entries[selectedDate] || null}
+          config={config}
+          currentUser={currentUser}
+          onClose={handleCloseDayDetail}
+          onSwitchDay={(date) => {
+            const currentEntry = schedule.entries[date];
+            if (currentEntry) {
+              const otherPerson = currentEntry.assignedTo === 'personA' ? 'personB' : 'personA';
+              handleManualAdjustment(date, otherPerson);
+            }
+          }}
+          onToggleInformationalUnavailability={(date, personId) => {
+            // Handle informational unavailability toggle
+            console.log('Toggle informational unavailability:', date, personId);
+          }}
+          onSaveNote={handleSaveNote}
+          onDeleteNote={handleDeleteNote}
+        />
+      )}
     </div>
   );
 } 

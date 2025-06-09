@@ -30,6 +30,7 @@ interface CalendarProps {
   onMarkUnavailable?: (date: string, personId: 'personA' | 'personB') => void;
   onRemoveUnavailable?: (date: string) => void;
   onManualAdjustment?: (date: string, newAssignment: 'personA' | 'personB') => void;
+  onDayDetailClick?: (date: string) => void;
   // Legacy props for backward compatibility
   previewChanges?: Record<string, 'personA' | 'personB'>;
   isPreviewMode?: boolean;
@@ -220,6 +221,7 @@ export default function Calendar({
   onMarkUnavailable,
   onRemoveUnavailable,
   onManualAdjustment,
+  onDayDetailClick,
   // Legacy props
   previewChanges = {},
   isPreviewMode = false,
@@ -471,6 +473,20 @@ export default function Calendar({
         {/* Action buttons - show for all days with entries, not just current month */}
         {!isPast && entry && (
           <div className="absolute top-1 right-1 flex space-x-1 z-10">
+            {/* Info/Detail button */}
+            {onDayDetailClick && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDayDetailClick(dateStr);
+                }}
+                className="p-1 text-gray-400 dark:text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                title="View day details and notes"
+              >
+                <Info className="h-4 w-4" />
+              </button>
+            )}
+            
             {/* Note indicator - moved to top area */}
             {hasNote && (
               <div className="p-1">
