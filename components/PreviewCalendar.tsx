@@ -271,8 +271,11 @@ export default function PreviewCalendar({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  const otherPerson = currentUser === 'personA' ? 'personB' : 'personA';
-                  onManualAdjustment(dateStr, otherPerson);
+                  const currentAssignment = getEffectiveAssignment(dateStr);
+                  if (currentAssignment) {
+                    const newAssignment = currentAssignment === 'personA' ? 'personB' : 'personA';
+                    onManualAdjustment(dateStr, newAssignment);
+                  }
                 }}
                 className="text-blue-500 hover:text-blue-600 transition-colors"
                 title="Switch assignment"
