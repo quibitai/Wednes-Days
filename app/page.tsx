@@ -44,6 +44,7 @@ export default function Home() {
   const [showConfig, setShowConfig] = useState(false);
   const [showCompare, setShowCompare] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [nlpInput, setNlpInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   // Load initial data
@@ -267,6 +268,60 @@ export default function Home() {
     }
   };
 
+  // Handle natural language input processing
+  const handleNaturalLanguageInput = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nlpInput.trim() || !preview) return;
+
+    setIsProcessing(true);
+    try {
+      const response = await fetch('/api/ai/parse', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          input: nlpInput.trim(),
+          userId: currentUser,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        // Process the structured data to update the schedule
+        const { action, dates, person } = result.data;
+
+        if (action === 'mark_unavailable' && dates) {
+          // Mark multiple dates as unavailable
+          for (const date of dates) {
+            const updatedPreview = previewManager.markUnavailable(preview, date, person || currentUser);
+            setPreview(updatedPreview);
+            updateChanges(updatedPreview);
+          }
+        } else if (action === 'manual_assignment' && dates && person) {
+          // Make manual assignments
+          for (const date of dates) {
+            const updatedPreview = previewManager.makeManualAdjustment(preview, date, person);
+            setPreview(updatedPreview);
+            updateChanges(updatedPreview);
+          }
+        }
+
+        // Clear the input on success
+        setNlpInput('');
+      } else {
+        console.error('AI parse failed:', result.error);
+        alert(`Could not understand command: ${result.error || 'Please try rephrasing your request.'}`);
+      }
+    } catch (error) {
+      console.error('Error processing natural language input:', error);
+      alert('Error processing command. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
@@ -410,6 +465,43 @@ export default function Home() {
             currentMonth={currentMonth}
             onMonthChange={handleMonthChange}
           />
+        )}
+
+        {/* Natural Language Input - Show when preview system is active */}
+        {preview && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              🤖 Smart Commands
+            </h3>
+            <form onSubmit={handleNaturalLanguageInput} className="space-y-3">
+              <div>
+                <label htmlFor="nlp-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Tell me what you'd like to change:
+                </label>
+                <input
+                  id="nlp-input"
+                  type="text"
+                  value={nlpInput}
+                  onChange={(e) => setNlpInput(e.target.value)}
+                  placeholder="e.g., 'Mark me unavailable July 15-17' or 'Give Adam custody on July 20'"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                  disabled={isProcessing}
+                />
+              </div>
+              <div className="flex justify-between items-center">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Natural language commands are processed by AI. Speak naturally!
+                </p>
+                <button
+                  type="submit"
+                  disabled={!nlpInput.trim() || isProcessing}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  {isProcessing ? 'Processing...' : 'Execute'}
+                </button>
+              </div>
+            </form>
+          </div>
         )}
 
         {/* Changes Panel - Show when there are pending changes */}
