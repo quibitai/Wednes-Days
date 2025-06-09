@@ -10,6 +10,7 @@ import CompareView from '@/components/CompareView';
 import ConfigurationPanel from '@/components/ConfigurationPanel';
 import ScheduleSummary from '@/components/ScheduleSummary';
 import DayDetailModal from '@/components/DayDetailModal';
+import HandoffList from '@/components/HandoffList';
 import { StorageManager } from '@/lib/storage/storageManager';
 import { PreviewManager } from '@/lib/services/previewManager';
 import { ScheduleGenerator } from '@/lib/services/scheduleGenerator';
@@ -49,6 +50,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showDayDetail, setShowDayDetail] = useState(false);
+  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
 
   // Load initial data
   useEffect(() => {
@@ -445,42 +447,72 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto p-4 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Image src="/dog-icon.png" alt="Dog Icon" width={64} height={64} className="h-16 w-16" />
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
               Wednes' Days
             </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              Custody Schedule Management
+            </p>
           </div>
           
-          <div className="flex items-center space-x-4">
-            {/* User Toggle */}
-            <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => setCurrentUser('personA')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  currentUser === 'personA'
-                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
-                <User className="h-4 w-4 inline mr-1" />
-                {config.personA.name}
-              </button>
-              <button
-                onClick={() => setCurrentUser('personB')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  currentUser === 'personB'
-                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
-                <User className="h-4 w-4 inline mr-1" />
-                {config.personB.name}
-              </button>
-            </div>
+          <div className="flex items-center space-x-3">
+            {/* View Toggle */}
+            {schedule && (
+              <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('calendar')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === 'calendar'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+                >
+                  Calendar
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+                >
+                  List
+                </button>
+              </div>
+            )}
 
-            {/* Dark Mode Toggle */}
+            {/* User Toggle */}
+            {config && (
+              <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 rounded-lg p-1 border border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setCurrentUser('personA')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    currentUser === 'personA'
+                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+                >
+                  <User className="h-4 w-4 inline mr-1" />
+                  {config.personA.name}
+                </button>
+                <button
+                  onClick={() => setCurrentUser('personB')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    currentUser === 'personB'
+                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+                >
+                  <User className="h-4 w-4 inline mr-1" />
+                  {config.personB.name}
+                </button>
+              </div>
+            )}
+            
+            {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
               className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
@@ -499,31 +531,59 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Calendar - Use PreviewCalendar when preview system is active */}
-        {preview ? (
-          <PreviewCalendar
-            preview={preview}
-            config={config}
-            currentUser={currentUser}
-            currentMonth={currentMonth}
-            onMonthChange={handleMonthChange}
-            onMarkUnavailable={handleMarkUnavailable}
-            onRemoveUnavailable={handleRemoveUnavailable}
-            onManualAdjustment={handleManualAdjustment}
-          />
-        ) : (
-          <Calendar
-            schedule={schedule}
-            config={config}
-            currentUser={currentUser}
-            currentMonth={currentMonth}
-            onMonthChange={handleMonthChange}
-            preview={preview}
-            onMarkUnavailable={handleMarkUnavailable}
-            onRemoveUnavailable={handleRemoveUnavailable}
-            onManualAdjustment={handleManualAdjustment}
-            onDayDetailClick={handleDayDetailClick}
-          />
+        {/* Main Content */}
+        {schedule && config && (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Calendar/List View */}
+            <div className="lg:col-span-3">
+              {viewMode === 'calendar' ? (
+                <>
+                  {/* Preview Calendar when available */}
+                  {preview ? (
+                    <PreviewCalendar
+                      preview={preview}
+                      config={config}
+                      currentUser={currentUser}
+                      currentMonth={currentMonth}
+                      onMonthChange={handleMonthChange}
+                      onMarkUnavailable={handleMarkUnavailable}
+                      onRemoveUnavailable={handleRemoveUnavailable}
+                      onManualAdjustment={handleManualAdjustment}
+                    />
+                  ) : (
+                    <Calendar
+                      schedule={schedule}
+                      config={config}
+                      currentUser={currentUser}
+                      currentMonth={currentMonth}
+                      onMonthChange={handleMonthChange}
+                      preview={preview}
+                      onMarkUnavailable={handleMarkUnavailable}
+                      onRemoveUnavailable={handleRemoveUnavailable}
+                      onManualAdjustment={handleManualAdjustment}
+                      onDayDetailClick={handleDayDetailClick}
+                    />
+                  )}
+                </>
+              ) : (
+                <HandoffList
+                  schedule={schedule}
+                  config={config}
+                />
+              )}
+            </div>
+
+            {/* Sidebar */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Schedule Summary */}
+              <ScheduleSummary
+                preview={preview || undefined}
+                schedule={schedule}
+                config={config}
+                currentMonth={currentMonth}
+              />
+            </div>
+          </div>
         )}
 
         {/* Natural Language Input - Show when preview system is active */}
@@ -575,14 +635,6 @@ export default function Home() {
             isProcessing={isProcessing}
           />
         )}
-
-        {/* Schedule Summary */}
-        <ScheduleSummary
-          preview={preview || undefined}
-          schedule={schedule}
-          config={config}
-          currentMonth={currentMonth}
-        />
 
         {/* Compare View Modal */}
         {showCompare && preview && (
