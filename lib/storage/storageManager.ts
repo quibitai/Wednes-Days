@@ -1,5 +1,5 @@
 import type { StorageAdapter, StorageBackend } from './types';
-import type { CustodySchedule, AppConfig } from '@/types';
+import type { CustodySchedule, AppConfig, ChangeHistory, ChangeHistoryEntry } from '@/types';
 
 import { LocalStorageAdapter } from './localStorageAdapter';
 import { VercelBlobAdapter } from './vercelBlobAdapter';
@@ -12,6 +12,7 @@ import { VercelKVAdapter } from './vercelKVAdapter';
 export class StorageManager {
   private adapter: StorageAdapter;
   private fallbackAdapter?: StorageAdapter;
+  private changeHistoryKey = 'custody-change-history';
 
   constructor(preferredBackend?: StorageBackend) {
     const { primary, fallback } = this.selectAdapters(preferredBackend);
@@ -401,6 +402,121 @@ export class StorageManager {
   }
 
   /**
+   * Bulk update multiple schedule entries
+   */
+  async bulkUpdateSchedule(entries: Record<string, any>): Promise<void> {
+    try {
+      const schedule = await this.loadSchedule();
+      if (!schedule) {
+        throw new Error('No schedule data found');
+      }
+
+      const updatedSchedule = {
+        ...schedule,
+        entries: {
+          ...schedule.entries,
+          ...entries,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      await this.saveSchedule(updatedSchedule);
+    } catch (error) {
+      console.warn(`Primary storage (${this.adapter.name}) failed, trying fallback:`, error);
+      if (this.fallbackAdapter) {
+        await this.bulkUpdateSchedule(entries);
+        this.switchToFallback();
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Mark a date as processed for rebalancing to prevent duplicate proposals
+   */
+  async markDateProcessedForRebalance(date: string): Promise<void> {
+    try {
+      const schedule = await this.loadSchedule();
+      if (!schedule) {
+        throw new Error('No schedule data found');
+      }
+
+      const entry = schedule.entries[date];
+      if (!entry) {
+        return; // No entry to mark
+      }
+
+      const updatedEntry = {
+        ...entry,
+        processedForRebalance: true,
+      };
+
+      const updatedSchedule = {
+        ...schedule,
+        entries: {
+          ...schedule.entries,
+          [date]: updatedEntry,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      await this.saveSchedule(updatedSchedule);
+    } catch (error) {
+      console.warn(`Primary storage (${this.adapter.name}) failed, trying fallback:`, error);
+      if (this.fallbackAdapter) {
+        await this.markDateProcessedForRebalance(date);
+        this.switchToFallback();
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Mark a date as unavailable (schedule-affecting)
+   */
+  async markDateUnavailable(date: string, personId: 'personA' | 'personB'): Promise<void> {
+    try {
+      const schedule = await this.loadSchedule();
+      if (!schedule) {
+        throw new Error('No schedule data found');
+      }
+
+      const entry = schedule.entries[date];
+      if (!entry) {
+        return; // No entry to mark
+      }
+
+      const updatedEntry = {
+        ...entry,
+        isUnavailable: true,
+        unavailableBy: personId,
+        processedForRebalance: false, // Reset this so auto-rebalancing can kick in
+      };
+
+      const updatedSchedule = {
+        ...schedule,
+        entries: {
+          ...schedule.entries,
+          [date]: updatedEntry,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      await this.saveSchedule(updatedSchedule);
+    } catch (error) {
+      console.warn(`Primary storage (${this.adapter.name}) failed, trying fallback:`, error);
+      if (this.fallbackAdapter) {
+        await this.markDateUnavailable(date, personId);
+        this.switchToFallback();
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
    * Switch to fallback adapter when primary fails
    */
   private switchToFallback(): void {
@@ -409,5 +525,198 @@ export class StorageManager {
       this.adapter = this.fallbackAdapter;
       this.fallbackAdapter = undefined;
     }
+  }
+
+  /**
+   * Load change history
+   */
+  async loadChangeHistory(): Promise<ChangeHistory> {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const stored = localStorage.getItem(this.changeHistoryKey);
+        if (stored) {
+          return JSON.parse(stored);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading change history:', error);
+    }
+
+    // Return default empty history
+    return {
+      entries: [],
+      maxEntries: 10
+    };
+  }
+
+  /**
+   * Get the most recent change that can be undone
+   */
+  async getLatestUndoableChange(): Promise<ChangeHistoryEntry | null> {
+    const history = await this.loadChangeHistory();
+    return history.entries.length > 0 ? history.entries[0] : null;
+  }
+
+  /**
+   * Undo the most recent change
+   */
+  async undoLastChange(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const history = await this.loadChangeHistory();
+      if (history.entries.length === 0) {
+        return { success: false, error: 'No changes to undo' };
+      }
+
+      const latestChange = history.entries[0];
+      const schedule = await this.loadSchedule();
+      if (!schedule) {
+        return { success: false, error: 'No schedule data found' };
+      }
+
+      // Restore the previous state
+      const updatedSchedule = {
+        ...schedule,
+        entries: {
+          ...schedule.entries,
+          ...latestChange.previousEntries
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      // Save the restored schedule
+      await this.saveSchedule(updatedSchedule);
+
+      // Remove the undone change from history
+      history.entries.shift();
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.changeHistoryKey, JSON.stringify(history));
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error undoing change:', error);
+      return { success: false, error: 'Failed to undo change' };
+    }
+  }
+
+  /**
+   * Enhanced bulk update that tracks changes
+   */
+  async bulkUpdateScheduleWithHistory(
+    entries: Record<string, any>,
+    type: ChangeHistoryEntry['type'],
+    description: string,
+    changedBy: 'personA' | 'personB'
+  ): Promise<void> {
+    const schedule = await this.loadSchedule();
+    if (!schedule) {
+      throw new Error('No schedule data found');
+    }
+
+    // Save current state to history
+    const affectedDates = Object.keys(entries);
+    const previousEntries: Record<string, any> = {};
+    affectedDates.forEach(date => {
+      if (schedule.entries[date]) {
+        previousEntries[date] = schedule.entries[date];
+      }
+    });
+
+    await this.saveChangeToHistory(type, description, changedBy, affectedDates, previousEntries);
+
+    // Apply the changes
+    await this.bulkUpdateSchedule(entries);
+  }
+
+  /**
+   * Save change to history before making modifications
+   */
+  private async saveChangeToHistory(
+    type: ChangeHistoryEntry['type'],
+    description: string,
+    changedBy: 'personA' | 'personB',
+    affectedDates: string[],
+    previousEntries: Record<string, any>
+  ): Promise<void> {
+    try {
+      const history = await this.loadChangeHistory();
+      
+      const newEntry: ChangeHistoryEntry = {
+        id: `change-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: new Date().toISOString(),
+        type,
+        description,
+        changedBy,
+        affectedDates,
+        previousEntries
+      };
+
+      // Add new entry to the beginning and limit to max entries
+      history.entries.unshift(newEntry);
+      if (history.entries.length > history.maxEntries) {
+        history.entries = history.entries.slice(0, history.maxEntries);
+      }
+
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.changeHistoryKey, JSON.stringify(history));
+      }
+    } catch (error) {
+      console.error('Error saving change to history:', error);
+      // Don't throw - history is not critical
+    }
+  }
+
+  /**
+   * Enhanced switch day with history tracking
+   */
+  async switchDayAssignmentWithHistory(date: string, changedBy: 'personA' | 'personB'): Promise<void> {
+    const schedule = await this.loadSchedule();
+    if (!schedule) {
+      throw new Error('No schedule data found');
+    }
+
+    const entry = schedule.entries[date];
+    if (!entry) {
+      throw new Error(`No schedule entry found for ${date}`);
+    }
+
+    // Save current state to history
+    await this.saveChangeToHistory(
+      'manual_switch',
+      `Switched ${date} assignment`,
+      changedBy,
+      [date],
+      { [date]: entry }
+    );
+
+    // Apply the change
+    await this.switchDayAssignment(date);
+  }
+
+  /**
+   * Enhanced mark unavailable with history tracking
+   */
+  async markDateUnavailableWithHistory(date: string, personId: 'personA' | 'personB'): Promise<void> {
+    const schedule = await this.loadSchedule();
+    if (!schedule) {
+      throw new Error('No schedule data found');
+    }
+
+    const entry = schedule.entries[date];
+    if (!entry) {
+      return;
+    }
+
+    // Save current state to history
+    await this.saveChangeToHistory(
+      'mark_unavailable',
+      `Marked ${date} as unavailable`,
+      personId,
+      [date],
+      { [date]: entry }
+    );
+
+    // Apply the change
+    await this.markDateUnavailable(date, personId);
   }
 } 

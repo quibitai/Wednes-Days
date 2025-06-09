@@ -11,17 +11,25 @@ export interface User {
 export interface ScheduleEntry {
   date: string; // ISO date string (YYYY-MM-DD)
   assignedTo: 'personA' | 'personB';
-  isUnavailable?: boolean; // Schedule-affecting unavailability (legacy, for existing data)
-  unavailableBy?: 'personA' | 'personB'; // Schedule-affecting unavailability (legacy, for existing data)
-  isAdjusted?: boolean; // Indicates if this day was modified by the algorithm
-  originalAssignedTo?: 'personA' | 'personB'; // Original assignment before adjustment
-  // New: Informational unavailability (doesn't affect schedule)
-  informationalUnavailability?: {
-    personA?: boolean; // Person A marked themselves unavailable (informational only)
-    personB?: boolean; // Person B marked themselves unavailable (informational only)
-  };
-  // Notes for the day
   note?: string; // User-added note for this day
+  // Legacy fields for backward compatibility
+  isUnavailable?: boolean; 
+  unavailableBy?: 'personA' | 'personB';
+  isAdjusted?: boolean;
+  originalAssignedTo?: 'personA' | 'personB';
+  informationalUnavailability?: {
+    personA?: boolean;
+    personB?: boolean;
+  };
+  processedForRebalance?: boolean;
+}
+
+export interface SchedulePreview {
+  current: Record<string, ScheduleEntry>; // Current saved schedule
+  unavailable: Record<string, 'personA' | 'personB'>; // Days marked unavailable
+  proposed: Record<string, ScheduleEntry>; // Auto-generated proposals
+  manual: Record<string, ScheduleEntry>; // Manual adjustments to proposals
+  hasUnsavedChanges: boolean; // Dirty state
 }
 
 export interface CustodySchedule {
@@ -74,4 +82,35 @@ export interface AlgorithmOptions {
   lookAheadDays: number;
   prioritizeExtension: boolean;
   maxHandoffs: number;
+}
+
+/**
+ * Represents a single change that can be undone
+ */
+export interface ChangeHistoryEntry {
+  id: string;
+  timestamp: string;
+  type: 'manual_switch' | 'auto_rebalance' | 'mark_unavailable' | 'bulk_update';
+  description: string;
+  changedBy: 'personA' | 'personB';
+  affectedDates: string[];
+  previousEntries: Record<string, ScheduleEntry>;
+}
+
+/**
+ * Change history management
+ */
+export interface ChangeHistory {
+  entries: ChangeHistoryEntry[];
+  maxEntries: number;
+}
+
+/**
+ * Preview-commit workflow types
+ */
+export interface ScheduleChange {
+  date: string;
+  fromPerson: 'personA' | 'personB';
+  toPerson: 'personA' | 'personB';
+  reason: 'unavailable' | 'manual' | 'auto_balance';
 } 

@@ -1,9 +1,18 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import './globals.css'
+import { ThemeProvider } from '@/contexts/ThemeContext'
+
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: "Wednes' Days",
-  description: 'A simple way to manage shared schedules.',
+  description: 'Dog custody scheduler for managing shared pet care',
+  icons: {
+    icon: '/dog-icon.png',
+    shortcut: '/dog-icon.png',
+    apple: '/dog-icon.png',
+  },
 }
 
 export default function RootLayout({
@@ -13,10 +22,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-50">
-        <div className="min-h-screen">
+      <body className={inter.className}>
+        <ThemeProvider>
           {children}
-        </div>
+        </ThemeProvider>
       </body>
     </html>
   )

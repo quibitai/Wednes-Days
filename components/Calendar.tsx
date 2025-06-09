@@ -16,6 +16,7 @@ import {
 import { ChevronLeft, ChevronRight, Clock, User, X, Check, Trash2, Ban, AlertTriangle, Calendar as CalendarIcon, ArrowRightLeft, StickyNote, Info } from 'lucide-react';
 import Image from 'next/image';
 import type { CustodySchedule, AppConfig, ScheduleEntry } from '@/types';
+import { hexToRgba } from '@/lib/colors';
 
 interface CalendarProps {
   schedule: CustodySchedule | null;
@@ -24,9 +25,14 @@ interface CalendarProps {
   onDateClick?: (date: string, event?: React.MouseEvent) => void;
   currentMonth: Date;
   onMonthChange: (date: Date) => void;
+  // New preview system props
+  preview?: import('@/types').SchedulePreview | null;
+  onMarkUnavailable?: (date: string, personId: 'personA' | 'personB') => void;
+  onRemoveUnavailable?: (date: string) => void;
+  onManualAdjustment?: (date: string, newAssignment: 'personA' | 'personB') => void;
+  // Legacy props for backward compatibility
   previewChanges?: Record<string, 'personA' | 'personB'>;
   isPreviewMode?: boolean;
-  onRemoveUnavailability?: (date: string) => void;
   onSwitchDay?: (date: string) => void;
   onToggleInformationalUnavailability?: (date: string, personId: 'personA' | 'personB') => void;
 }
@@ -210,9 +216,13 @@ export default function Calendar({
   onDateClick,
   currentMonth,
   onMonthChange,
+  preview = null,
+  onMarkUnavailable,
+  onRemoveUnavailable,
+  onManualAdjustment,
+  // Legacy props
   previewChanges = {},
   isPreviewMode = false,
-  onRemoveUnavailability,
   onSwitchDay,
   onToggleInformationalUnavailability,
 }: CalendarProps) {
@@ -344,34 +354,54 @@ export default function Calendar({
     // Make sure we have an entry and it's not a past date
     const isTooltipVisible = Boolean(entry && !isPast && (isHovered || activeTooltip === dateStr));
     
-    // Base classes without color-specific styling
+    // Base day styling  
     let dayClasses = `
-      relative min-h-[80px] border-2 border-gray-200 dark:border-gray-800 transition-all duration-200 cursor-pointer group font-normal
-      bg-white dark:bg-black
-      ${isCurrentMonth ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400 dark:text-gray-600 opacity-85'}
-      ${isClickable ? 'hover:bg-gray-50 dark:hover:bg-gray-900' : 'cursor-not-allowed opacity-60'}
-      ${isPast ? 'bg-gray-50 dark:bg-black/50' : ''}
-      ${isHovered && !isPast ? 'shadow-lg' : ''}
-      ${isTooltipVisible ? 'z-[110]' : 'z-10'}
+      relative min-h-[80px] border-2 transition-all duration-200 font-normal
+      ${isClickable ? 'cursor-pointer hover:shadow-lg' : 'cursor-not-allowed'}
     `;
 
-    // Calculate background color and style
     let dayStyle: React.CSSProperties = {};
-    
-    if (!isPast && displayPerson && !handoffInfo.isHandoff) {
-      const personColors = getPersonColor(displayPerson, isAdjusted, !!hasPreviewChange);
-      dayStyle = {
-        backgroundColor: personColors.backgroundColor,
-        color: personColors.color,
-      };
-      
-      if (hasPreviewChange) {
-        dayClasses += ' border-dashed';
-      }
-      
+
+    if (handoffInfo.isHandoff) {
+      dayClasses += ' bg-transparent';
+    } else if (displayPerson) {
+      const person = config[displayPerson];
+      dayStyle.backgroundColor = hexToRgba(person.color, isCurrentMonth ? 0.2 : 0.1);
+    } else {
+      dayClasses += ` ${isCurrentMonth ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-800'}`;
+    }
+
+    if (hasPreviewChange) {
+      const previewPerson = config[hasPreviewChange];
+      dayStyle.backgroundColor = previewPerson.color;
+      dayStyle.opacity = isCurrentMonth ? 0.3 : 0.15; // Slightly more intense for preview
+      dayStyle.backgroundImage = `repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 8px,
+        rgba(255,255,255,0.3) 8px,
+        rgba(255,255,255,0.3) 16px
+      )`;
+    }
+
+    // Border styling
+    if (isHovered) {
+      dayClasses += ' border-blue-500 dark:border-blue-400';
+    } else if (isToday) {
+      dayClasses += ' border-blue-300 dark:border-blue-500';
+    } else if (isUnavailable) {
+      dayClasses += ' border-red-400 border-dashed';
+    } else {
+      dayClasses += ' border-gray-200 dark:border-gray-700';
+    }
+
+    // Opacity for overflow days and past dates
+    if (!isPast) {
       if (!isCurrentMonth) {
-        dayStyle.opacity = 0.85;
+        dayStyle.opacity = 0.7; // Reduce opacity for overflow days
       }
+    } else {
+      dayStyle.opacity = 0.6; // Past dates are more muted
     }
 
     const personName = displayPerson ? (displayPerson === 'personA' ? config.personA.name : config.personB.name) : null;
@@ -396,53 +426,50 @@ export default function Calendar({
           setTooltipPosition(null);
         }}
       >
-        {/* Handoff day split background */}
-        {handoffInfo.isHandoff && !isPast && (
-          <div className="absolute inset-0 flex overflow-hidden">
-            {/* Left half - outgoing person */}
-            <div 
-              className={`w-1/2 h-full ${!isCurrentMonth ? 'opacity-85' : ''}`}
-              style={{
-                backgroundColor: handoffInfo.fromPerson === 'personA' ? 'var(--color-person-a-100)' : 'var(--color-person-b-100)'
-              }}
-            />
-            {/* Right half - incoming person */}
-            <div 
-              className={`w-1/2 h-full ${!isCurrentMonth ? 'opacity-85' : ''}`}
-              style={{
-                backgroundColor: handoffInfo.toPerson === 'personA' ? 'var(--color-person-a-100)' : 'var(--color-person-b-100)'
-              }}
-            />
-            {/* Vertical divider */}
-            <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-400 dark:bg-gray-500 transform -translate-x-px"></div>
-          </div>
-        )}
-
-        {/* Date number - muted for overflow dates, ensure normal font weight */}
-        <div className={`absolute top-2 left-2 text-sm font-medium z-10 ${
-          !isCurrentMonth ? 'text-gray-600 dark:text-gray-400' : 
-          handoffInfo.isHandoff ? 
-            (handoffInfo.fromPerson === 'personA' ? 'text-person-a-800' : 'text-person-b-800') :
-            ''
-        }`}>
-          {format(date, 'd')}
-        </div>
-
         {/* Today indicator - dog icon */}
         {isToday && (
           <div className="absolute top-1/2 left-1/4 transform -translate-x-1/2 -translate-y-1/2 z-20">
             <Image
               src="/dog-iconB.png"
               alt="Today"
-              width={32}
-              height={32}
-              className="object-contain"
+              width={40}
+              height={40}
+              className="object-contain drop-shadow-lg"
             />
           </div>
         )}
 
-        {/* Action buttons - always visible for current month, non-past dates */}
-        {isCurrentMonth && !isPast && entry && (
+        {/* Handoff day split background */}
+        {handoffInfo.isHandoff && !isPast && (
+          <div className="absolute inset-0 flex">
+            {/* From person half */}
+            <div 
+              className="w-1/2 h-full"
+              style={{
+                backgroundColor: hexToRgba(handoffInfo.fromPerson ? config[handoffInfo.fromPerson].color : '#808080', isCurrentMonth ? 0.2 : 0.1)
+              }}
+            />
+            {/* To person half */}
+            <div 
+              className="w-1/2 h-full"
+              style={{
+                backgroundColor: hexToRgba(handoffInfo.toPerson ? config[handoffInfo.toPerson].color : '#808080', isCurrentMonth ? 0.2 : 0.1)
+              }}
+            />
+            {/* Handoff dotted divider line */}
+            <div className="absolute left-1/2 top-0 bottom-0 w-0.5 transform -translate-x-1/2 border-l-2 border-dotted border-gray-500 dark:border-gray-400" />
+          </div>
+        )}
+
+        {/* Date number - muted for overflow dates, ensure normal font weight */}
+        <div className={`absolute top-2 left-2 text-sm font-medium z-10 ${
+          !isCurrentMonth ? 'text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-100'
+        }`}>
+          {format(date, 'd')}
+        </div>
+
+        {/* Action buttons - show for all days with entries, not just current month */}
+        {!isPast && entry && (
           <div className="absolute top-1 right-1 flex space-x-1 z-10">
             {/* Note indicator - moved to top area */}
             {hasNote && (
@@ -490,31 +517,44 @@ export default function Calendar({
                 <Ban className="h-4 w-4" />
               </button>
             )}
+            
+            {/* Mark unavailable button (schedule-affecting) */}
+            {onMarkUnavailable && !entry.isUnavailable && entry.assignedTo === currentUser && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMarkUnavailable(dateStr, currentUser);
+                }}
+                className="p-1 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                title="Mark unavailable (will trigger schedule rebalancing)"
+              >
+                <AlertTriangle className="h-4 w-4" />
+              </button>
+            )}
           </div>
         )}
 
         {/* Quick actions - show on hover for legacy unavailability removal */}
-        {isHovered && !isPast && entry && isUnavailable && onRemoveUnavailability && (
+        {isHovered && !isPast && entry && isUnavailable && onRemoveUnavailable && (
           <div className="absolute top-1 left-1 z-10">
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onRemoveUnavailability(dateStr);
+                onRemoveUnavailable(dateStr);
               }}
-              className="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+              className="text-red-500 hover:text-red-600 transition-colors"
               title="Remove unavailability"
             >
-              <X className="h-3 w-3" />
+              <X className="h-4 w-4" />
             </button>
           </div>
         )}
 
-        {/* Selection indicator */}
         {/* Preview indicator */}
         {hasPreviewChange && (
           <div className="absolute top-1 right-1 z-10">
-            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-              <Clock className="h-3 w-3 text-white" />
+            <div className="text-green-500">
+              <Clock className="h-4 w-4" />
             </div>
           </div>
         )}
@@ -522,49 +562,68 @@ export default function Calendar({
         {/* Person indicator and status - only show if there's an entry, muted for overflow */}
         {entry && displayPerson && (
           <div className="absolute bottom-2 left-2 right-2 z-10">
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center space-x-1 flex-1 min-w-0">
-                <User className={`h-3 w-3 flex-shrink-0 ${
-                  !isCurrentMonth ? 'text-gray-600 dark:text-gray-400' : 
-                  handoffInfo.isHandoff ? 
-                    (handoffInfo.fromPerson === 'personA' ? 'text-person-a-800' : 'text-person-b-800') :
-                    ''
-                }`} />
-                <span className={`font-medium truncate ${
-                  !isCurrentMonth ? 'text-gray-600 dark:text-gray-400' : 
-                  handoffInfo.isHandoff ? 
-                    (handoffInfo.fromPerson === 'personA' ? 'text-person-a-800' : 'text-person-b-800') :
-                    ''
-                }`}>
-                  {hasPreviewChange ? previewPersonName : personName}
-                </span>
-              </div>
-              
-              {/* Right side with status indicators and info button */}
-              <div className="flex items-center space-x-1 flex-shrink-0">
-                {/* Legacy unavailability indicator */}
-                {isUnavailable && (
-                  <Ban className={`h-3 w-3 text-red-500 dark:text-red-400 ${!isCurrentMonth ? 'opacity-60' : ''}`} />
-                )}
-                
-                {/* Info button - always show for entries, aligned with unavailability */}
-                {!isPast && (
-                  <button
-                    onClick={(e) => {
-                      handleInfoClick(dateStr, e);
-                    }}
-                    className={`p-0.5 transition-colors ${
-                      activeTooltip === dateStr
-                        ? 'text-gray-900 dark:text-gray-100 bg-gray-200 dark:bg-gray-700 rounded-full'
-                        : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-full'
-                    }`}
-                    title="Show day details"
+            {handoffInfo.isHandoff ? (
+              /* Handoff day - show both names */
+              <div className="flex text-xs">
+                {/* From person name - left half */}
+                <div className="w-1/2 pr-1">
+                  <div 
+                    className="font-medium text-center truncate"
+                    style={{ color: handoffInfo.fromPerson ? config[handoffInfo.fromPerson].color : '#gray' }}
                   >
-                    <Info className="h-3 w-3" />
-                  </button>
-                )}
+                    {handoffInfo.fromPerson ? config[handoffInfo.fromPerson].name : ''}
+                  </div>
+                </div>
+                {/* To person name - right half */}
+                <div className="w-1/2 pl-1">
+                  <div 
+                    className="font-medium text-center truncate"
+                    style={{ color: handoffInfo.toPerson ? config[handoffInfo.toPerson].color : '#gray' }}
+                  >
+                    {handoffInfo.toPerson ? config[handoffInfo.toPerson].name : ''}
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* Regular day - show single person with status */
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center space-x-1 flex-1 min-w-0">
+                  <User className={`h-3 w-3 flex-shrink-0 ${
+                    !isCurrentMonth ? 'text-gray-600 dark:text-gray-400' : ''
+                  }`} />
+                  <span className={`font-medium truncate ${
+                    !isCurrentMonth ? 'text-gray-600 dark:text-gray-400' : ''
+                  }`}>
+                    {hasPreviewChange ? previewPersonName : personName}
+                  </span>
+                </div>
+                
+                {/* Right side with status indicators and info button */}
+                <div className="flex items-center space-x-1 flex-shrink-0">
+                  {/* Legacy unavailability indicator */}
+                  {isUnavailable && (
+                    <Ban className={`h-3 w-3 text-red-500 dark:text-red-400 ${!isCurrentMonth ? 'opacity-60' : ''}`} />
+                  )}
+                  
+                  {/* Info button - always show for entries, aligned with unavailability */}
+                  {!isPast && (
+                    <button
+                      onClick={(e) => {
+                        handleInfoClick(dateStr, e);
+                      }}
+                      className={`p-0.5 transition-colors ${
+                        activeTooltip === dateStr 
+                          ? 'text-blue-600 dark:text-blue-400' 
+                          : 'text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400'
+                      }`}
+                      title="View day details"
+                    >
+                      <Info className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -590,7 +649,7 @@ export default function Calendar({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-950 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
       {/* Context Menu */}
       {showContextMenu && (
         <>
@@ -599,7 +658,7 @@ export default function Calendar({
             onClick={() => setShowContextMenu(null)}
           />
           <div 
-            className="fixed z-50 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-lg rounded-lg py-2 min-w-[160px]"
+            className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg rounded-lg py-2 min-w-[160px]"
             style={{ 
               left: showContextMenu.x, 
               top: showContextMenu.y,
@@ -609,7 +668,7 @@ export default function Calendar({
             {schedule.entries[showContextMenu.date]?.isUnavailable ? (
               <button
                 onClick={() => {
-                  onRemoveUnavailability?.(showContextMenu.date);
+                  onRemoveUnavailable?.(showContextMenu.date);
                   setShowContextMenu(null);
                 }}
                 className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center space-x-2 text-red-600 dark:text-red-400"
@@ -627,28 +686,24 @@ export default function Calendar({
       )}
 
       {/* Calendar Header */}
-      <div className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 rounded-t-lg">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => onMonthChange(addDays(monthStart, -1))}
-            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors"
-            title="Previous month"
-          >
-            <ChevronLeft className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-          </button>
-          
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {format(currentMonth, 'MMMM yyyy')}
-          </h2>
-          
-          <button
-            onClick={() => onMonthChange(addDays(monthEnd, 1))}
-            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors"
-            title="Next month"
-          >
-            <ChevronRight className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-          </button>
-        </div>
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+        <button
+          onClick={() => onMonthChange(addDays(currentMonth, -30))}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-600 dark:text-gray-400"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+          {format(currentMonth, 'MMMM yyyy')}
+        </h2>
+        
+        <button
+          onClick={() => onMonthChange(addDays(currentMonth, 30))}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-gray-600 dark:text-gray-400"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Preview Legend */}
@@ -668,9 +723,9 @@ export default function Calendar({
       )}
 
       {/* Days of Week Header */}
-      <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950">
+      <div className="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-          <div key={day} className="px-3 py-3 text-center text-sm font-medium text-gray-600 dark:text-gray-400">
+          <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 dark:text-gray-400">
             {day}
           </div>
         ))}

@@ -6,6 +6,14 @@ import { v4 as uuidv4 } from 'uuid';
  */
 export class ProposalService {
   private storageKey = 'custody-proposals';
+  private serverProposals: ScheduleProposal[] = []; // Server-side fallback storage
+
+  /**
+   * Check if we're in browser environment
+   */
+  private isBrowser(): boolean {
+    return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+  }
 
   /**
    * Create a new proposal
@@ -247,8 +255,13 @@ export class ProposalService {
    */
   private async loadProposals(): Promise<ScheduleProposal[]> {
     try {
-      const stored = localStorage.getItem(this.storageKey);
-      return stored ? JSON.parse(stored) : [];
+      if (this.isBrowser()) {
+        const stored = localStorage.getItem(this.storageKey);
+        return stored ? JSON.parse(stored) : [];
+      } else {
+        // Server-side fallback - return empty array or server storage
+        return this.serverProposals;
+      }
     } catch (error) {
       console.error('Error loading proposals:', error);
       return [];
@@ -257,7 +270,12 @@ export class ProposalService {
 
   private async saveProposals(proposals: ScheduleProposal[]): Promise<void> {
     try {
-      localStorage.setItem(this.storageKey, JSON.stringify(proposals));
+      if (this.isBrowser()) {
+        localStorage.setItem(this.storageKey, JSON.stringify(proposals));
+      } else {
+        // Server-side fallback
+        this.serverProposals = proposals;
+      }
     } catch (error) {
       console.error('Error saving proposals:', error);
       throw error;
