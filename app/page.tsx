@@ -50,23 +50,25 @@ export default function Home() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const loadedConfig = await storageManager.loadConfig();
-        const loadedSchedule = await storageManager.loadSchedule();
+        setIsLoading(true);
         
-        setConfig(loadedConfig);
-        setSchedule(loadedSchedule);
+        // Debug: Check storage info
+        const storageInfo = storageManager.getStorageInfo();
+        console.log('Storage Info:', storageInfo);
         
-        // Initialize preview system if we have a schedule
-        if (loadedSchedule) {
-          // Check for existing preview state
-          const existingPreview = previewManager.loadPreview();
-          if (existingPreview && Object.keys(existingPreview.current).length > 0) {
-            setPreview(existingPreview);
-            updateChanges(existingPreview);
-          } else {
-            // Initialize new preview from current schedule
-            initializePreview(loadedSchedule.entries);
-          }
+        const [savedConfig, savedSchedule] = await Promise.all([
+          storageManager.loadConfig(),
+          storageManager.loadSchedule()
+        ]);
+
+        console.log('Loaded config:', savedConfig ? 'Found' : 'Not found');
+        console.log('Loaded schedule:', savedSchedule ? 'Found' : 'Not found');
+        
+        setConfig(savedConfig);
+        setSchedule(savedSchedule);
+        
+        if (savedSchedule) {
+          initializePreview(savedSchedule.entries);
         }
       } catch (error) {
         console.error('Error loading data:', error);
