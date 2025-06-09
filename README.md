@@ -4,19 +4,26 @@
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fquibitai%2FWednes-Days.git)
 
-## ✨ Latest Features (New!)
+## ✨ Latest Features (v2.2.0 - NEW!)
 
-### 🎯 Flexible 4-Day Rule System
-- **Warning-based approach**: Override the 4-day rule when life happens
-- **Smart conflict resolution**: AI-powered strategies automatically find solutions
-- **Visual warnings**: See exactly which violations will occur before confirming
-- **Informed decisions**: Make schedule changes with full transparency
+### 🤖 AI-Powered Schedule Rebalancing
+- **GPT-4.1 Mini Integration**: Advanced AI analyzes your entire schedule context
+- **3-Night Block Optimization**: Targets ideal 3-night custody periods (2-4 nights acceptable)
+- **Smart Pattern Recognition**: Understands existing blocks and prevents problematic extensions
+- **Zero Single-Night Policy**: AI strictly avoids creating isolated single-night assignments
+- **Natural Language Commands**: Tell the AI what you want: "I can't have Emma next Friday"
 
-### 🧠 Advanced Scheduling Algorithm
-1. **Early Handoff Strategy**: End custody before unavailable day
-2. **Extension Strategy**: Other person takes over through conflict period  
-3. **Period Shifting**: Intelligently adjust custody boundaries
-4. **Forced Assignment**: Allow rule violations with clear warnings
+### 🧠 Intelligent Conflict Resolution
+- **Context-Aware Analysis**: AI considers 4-week schedule context for optimal decisions
+- **Multi-Strategy Approach**: AI → Algorithmic → Minimal fallback system
+- **Block Extension Prevention**: Never extends existing 3+ night blocks inappropriately
+- **Handoff Minimization**: Reduces custody transitions while maintaining fairness
+
+### 🎯 Enhanced User Experience
+- **Footer Action Buttons**: Accept/Discard AI proposals directly in calendar footer
+- **Real-Time Validation**: Immediate feedback on AI proposals with detailed explanations
+- **Transparent Reasoning**: See exactly why AI made each scheduling decision
+- **Debug Mode Available**: Advanced logging for troubleshooting schedule conflicts
 
 ## 🚀 Key Features
 
@@ -67,6 +74,7 @@
 
 - **Framework**: Next.js 14 with App Router
 - **Language**: TypeScript for type safety
+- **AI**: OpenAI GPT-4.1 Mini for intelligent scheduling
 - **Styling**: Tailwind CSS for responsive design
 - **Icons**: Lucide React for consistent iconography
 - **Storage**: Multi-backend with automatic selection
@@ -110,10 +118,24 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 3. **Review the preview** showing schedule adjustments
 4. **Confirm or adjust** based on warnings and impact analysis
 
+### Using AI Features (v2.2.0+)
+1. **Natural Language Commands**: Type requests like "I can't have Emma next Friday" 
+2. **Smart Rebalancing**: AI automatically creates optimal 3-night custody blocks
+3. **Preview Changes**: Review AI proposals with detailed explanations before accepting
+4. **Footer Actions**: Use Accept/Discard buttons in the calendar footer
+5. **Fallback Protection**: System automatically falls back to algorithmic approach if AI fails
+
 ### Understanding Warnings
 - **Yellow warnings**: 4-day rule violations that you can override
 - **Schedule adjustments**: Automatic reassignments to resolve conflicts
 - **Handoff counts**: Number of custody transitions created
+
+### Using AI Features (v2.2.0+)
+1. **Natural Language Commands**: Type requests like "I can't have Emma next Friday" 
+2. **Smart Rebalancing**: AI automatically creates optimal 3-night custody blocks
+3. **Preview Changes**: Review AI proposals with detailed explanations before accepting
+4. **Footer Actions**: Use Accept/Discard buttons in the calendar footer
+5. **Fallback Protection**: System automatically falls back to algorithmic approach if AI fails
 
 ### Best Practices
 - **Plan ahead**: Mark unavailability as early as possible
@@ -147,6 +169,13 @@ Advanced conflict resolution with four strategies:
 - **Conflict prevention**: Automatic refresh when external changes are detected
 
 ## 📊 Storage Options & Configuration
+
+### AI Configuration (Required for v2.2.0+)
+Enable intelligent schedule rebalancing with OpenAI:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+```
 
 ### Vercel Storage (Recommended)
 Perfect for production deployments with automatic scaling:
@@ -197,6 +226,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🎯 Roadmap
 
+- [x] **AI-powered schedule rebalancing** with GPT-4.1 Mini (v2.2.0)
+- [x] **Natural language processing** for schedule commands (v2.2.0)
+- [x] **Smart 3-night block optimization** (v2.2.0)
 - [ ] **Push notifications** for schedule changes
 - [ ] **Calendar integrations** (Google Calendar, iCal)
 - [ ] **Multi-pet support** for families with multiple animals
