@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, User, Settings, Sun, Moon } from 'lucide-react';
+import { Calendar as CalendarIcon, User, Settings, Sun, Moon, History } from 'lucide-react';
 import Image from 'next/image';
 import Calendar from '@/components/Calendar';
 import PreviewCalendar from '@/components/PreviewCalendar';
@@ -11,6 +11,7 @@ import ConfigurationPanel from '@/components/ConfigurationPanel';
 import ScheduleSummary from '@/components/ScheduleSummary';
 import DayDetailModal from '@/components/DayDetailModal';
 import HandoffList from '@/components/HandoffList';
+import HistoryPanel from '@/components/HistoryPanel';
 import { StorageManager } from '@/lib/storage/storageManager';
 import { PreviewManager } from '@/lib/services/previewManager';
 import { ScheduleGenerator } from '@/lib/services/scheduleGenerator';
@@ -51,6 +52,7 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [showDayDetail, setShowDayDetail] = useState(false);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [showHistory, setShowHistory] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -682,6 +684,12 @@ export default function Home() {
           onDeleteNote={handleDeleteNote}
         />
       )}
+
+      {/* History Panel */}
+      <HistoryPanel
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+      />
     </div>
   );
 } 
