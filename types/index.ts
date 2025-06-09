@@ -24,14 +24,6 @@ export interface ScheduleEntry {
   processedForRebalance?: boolean;
 }
 
-export interface SchedulePreview {
-  current: Record<string, ScheduleEntry>; // Current saved schedule
-  unavailable: Record<string, 'personA' | 'personB'>; // Days marked unavailable
-  proposed: Record<string, ScheduleEntry>; // Auto-generated proposals
-  manual: Record<string, ScheduleEntry>; // Manual adjustments to proposals
-  hasUnsavedChanges: boolean; // Dirty state
-}
-
 export interface CustodySchedule {
   entries: Record<string, ScheduleEntry>; // date string -> ScheduleEntry
   startDate: string;
@@ -60,6 +52,8 @@ export interface AppConfig {
   personB: User;
   maxConsecutiveDays: number;
   defaultRotationDays: number;
+  startDate?: string; // ISO date string for when the schedule should start
+  initialPerson?: 'personA' | 'personB'; // Who should have custody on the start date
 }
 
 export interface ValidationResult {
@@ -108,6 +102,14 @@ export interface ChangeHistory {
 /**
  * Preview-commit workflow types
  */
+export interface SchedulePreview {
+  current: Record<string, ScheduleEntry>; // Current saved schedule
+  unavailable: Record<string, 'personA' | 'personB'>; // Days marked unavailable
+  proposed: Record<string, ScheduleEntry>; // Auto-generated proposals
+  manual: Record<string, ScheduleEntry>; // Manual adjustments to proposals
+  hasUnsavedChanges: boolean; // Dirty state
+}
+
 export interface ScheduleChange {
   date: string;
   fromPerson: 'personA' | 'personB';

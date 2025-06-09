@@ -237,19 +237,20 @@ export default function Home() {
     
     setIsProcessing(true);
     try {
-      const startDate = new Date();
+      const startDate = config.startDate ? new Date(config.startDate) : new Date();
+      const initialPerson = config.initialPerson || 'personA';
       
       // Generate a full year worth of schedule initially (365 days)
       const newScheduleEntries = scheduleGenerator.generate3DayRotation(
         startDate,
-        'personA',
+        initialPerson,
         365
       );
       
       const newSchedule: CustodySchedule = {
         entries: newScheduleEntries,
         startDate: startDate.toISOString().split('T')[0],
-        initialPerson: 'personA',
+        initialPerson: initialPerson,
         lastUpdated: new Date().toISOString()
       };
       

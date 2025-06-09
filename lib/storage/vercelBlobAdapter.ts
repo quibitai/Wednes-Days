@@ -1,4 +1,4 @@
-import { put, del, head } from '@vercel/blob';
+import { put, del, head, list } from '@vercel/blob';
 import type { StorageAdapter } from './types';
 import type { CustodySchedule, AppConfig } from '@/types';
 
@@ -46,13 +46,21 @@ export class VercelBlobAdapter implements StorageAdapter {
     if (!this.isConfigured()) return null;
 
     try {
-      // Check if the blob exists
-      const response = await fetch(
-        `https://${process.env.VERCEL_URL || 'localhost'}/api/blob/${this.configPath}`
-      );
+      // List blobs to find the config file
+      const { blobs } = await list({
+        token: this.token,
+        prefix: this.configPath,
+      });
+
+      if (blobs.length === 0) {
+        return null; // No config file found
+      }
+
+      // Get the most recent config blob
+      const configBlob = blobs[0];
+      const response = await fetch(configBlob.url);
 
       if (!response.ok) {
-        if (response.status === 404) return null;
         throw new Error(`HTTP ${response.status}`);
       }
 
@@ -62,6 +70,8 @@ export class VercelBlobAdapter implements StorageAdapter {
         personB: data.personB,
         maxConsecutiveDays: data.maxConsecutiveDays,
         defaultRotationDays: data.defaultRotationDays,
+        startDate: data.startDate,
+        initialPerson: data.initialPerson,
       };
     } catch (error) {
       console.error('Error loading config from Vercel Blob:', error);
@@ -94,12 +104,21 @@ export class VercelBlobAdapter implements StorageAdapter {
     if (!this.isConfigured()) return null;
 
     try {
-      const response = await fetch(
-        `https://${process.env.VERCEL_URL || 'localhost'}/api/blob/${this.schedulePath}`
-      );
+      // List blobs to find the schedule file
+      const { blobs } = await list({
+        token: this.token,
+        prefix: this.schedulePath,
+      });
+
+      if (blobs.length === 0) {
+        return null; // No schedule file found
+      }
+
+      // Get the most recent schedule blob
+      const scheduleBlob = blobs[0];
+      const response = await fetch(scheduleBlob.url);
 
       if (!response.ok) {
-        if (response.status === 404) return null;
         throw new Error(`HTTP ${response.status}`);
       }
 

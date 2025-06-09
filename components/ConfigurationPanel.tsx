@@ -20,6 +20,8 @@ export default function ConfigurationPanel({ config, onSave, onClose, onSchedule
     personBColor: config?.personB.color || '#EF4444',
     maxConsecutiveDays: config?.maxConsecutiveDays || 7,
     defaultRotationDays: config?.defaultRotationDays || 3,
+    startDate: config?.startDate || new Date().toISOString().split('T')[0],
+    initialPerson: config?.initialPerson || 'personA' as 'personA' | 'personB',
   });
 
   const [isResetting, setIsResetting] = useState(false);
@@ -133,6 +135,8 @@ export default function ConfigurationPanel({ config, onSave, onClose, onSchedule
       },
       maxConsecutiveDays: formData.maxConsecutiveDays,
       defaultRotationDays: formData.defaultRotationDays,
+      startDate: formData.startDate,
+      initialPerson: formData.initialPerson,
     };
 
     onSave(newConfig);
@@ -209,6 +213,38 @@ export default function ConfigurationPanel({ config, onSave, onClose, onSchedule
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Schedule Start Date
+              </label>
+              <input
+                type="date"
+                value={formData.startDate}
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                The date when the custody schedule should begin
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Who Starts with Custody
+              </label>
+              <select
+                value={formData.initialPerson}
+                onChange={(e) => setFormData({ ...formData, initialPerson: e.target.value as 'personA' | 'personB' })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              >
+                <option value="personA">{formData.personAName}</option>
+                <option value="personB">{formData.personBName}</option>
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Who should have custody on the start date
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Default Rotation Days
               </label>
               <input
@@ -239,8 +275,13 @@ export default function ConfigurationPanel({ config, onSave, onClose, onSchedule
           {/* Reset Schedule Section */}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
             <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Schedule Reset
+              Schedule Management
             </h3>
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3 mb-3">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                💡 <strong>Note:</strong> If you don't have a schedule yet, saving this configuration will generate a new schedule using your selected start date and initial person.
+              </p>
+            </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
               Reset the entire schedule to a 3-day rotation starting with Jane having custody yesterday.
             </p>
