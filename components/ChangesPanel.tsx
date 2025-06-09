@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { Check, X, Calendar, ArrowRight, AlertTriangle, Eye } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Check, X, Calendar, ArrowRight, AlertTriangle, Eye, Brain, Loader2 } from 'lucide-react';
 import type { SchedulePreview, ScheduleChange, AppConfig } from '@/types';
 
 interface ChangesPanelProps {
@@ -23,6 +23,42 @@ export default function ChangesPanel({
   onShowCompare,
   isProcessing = false 
 }: ChangesPanelProps) {
+  const [aiExplanation, setAiExplanation] = useState<string>('');
+  const [explanationLoading, setExplanationLoading] = useState(false);
+
+  // Load AI explanation when changes are detected
+  useEffect(() => {
+    const loadExplanation = async () => {
+      if (changes.length === 0) return;
+
+      setExplanationLoading(true);
+      try {
+        const response = await fetch('/api/ai/explain', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            changes,
+            userType: 'personA', // Default to personA, could be made dynamic
+            currentSchedule: preview.current
+          }),
+        });
+
+        const result = await response.json();
+        if (result.success && result.explanation) {
+          setAiExplanation(result.explanation);
+        }
+      } catch (error) {
+        console.error('Error loading AI explanation:', error);
+      } finally {
+        setExplanationLoading(false);
+      }
+    };
+
+    loadExplanation();
+  }, [changes, preview.current]);
+
   if (!preview.hasUnsavedChanges || changes.length === 0) {
     return null;
   }
@@ -112,6 +148,30 @@ export default function ChangesPanel({
             </div>
           )}
         </div>
+
+        {/* AI Explanation Section */}
+        {(aiExplanation || explanationLoading) && (
+          <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+            <div className="flex items-start space-x-2">
+              <Brain className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                  AI Summary
+                </h4>
+                {explanationLoading ? (
+                  <div className="flex items-center space-x-2 text-sm text-blue-700 dark:text-blue-300">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Analyzing changes...</span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-blue-700 dark:text-blue-300">
+                    {aiExplanation}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="flex items-center justify-between">
