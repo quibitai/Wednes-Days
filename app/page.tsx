@@ -450,13 +450,16 @@ export default function Home() {
       <div className="max-w-7xl mx-auto p-4 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Wednes' Days
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Custody Schedule Management
-            </p>
+          <div className="flex items-center space-x-3">
+            <Image src="/dog-icon.png" alt="Dog Icon" width={64} height={64} className="h-16 w-16" />
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+                Wednes' Days
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                Custody Schedule Management
+              </p>
+            </div>
           </div>
           
           <div className="flex items-center space-x-3">
@@ -530,6 +533,15 @@ export default function Home() {
             >
               <Settings className="h-5 w-5" />
             </button>
+
+            {/* History */}
+            <button
+              onClick={() => setShowHistory(true)}
+              className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+              title="View change history"
+            >
+              <History className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
@@ -577,13 +589,7 @@ export default function Home() {
 
             {/* Sidebar */}
             <div className="lg:col-span-1 space-y-6">
-              {/* Schedule Summary */}
-              <ScheduleSummary
-                preview={preview || undefined}
-                schedule={schedule}
-                config={config}
-                currentMonth={currentMonth}
-              />
+              {/* Sidebar content can go here in the future */}
             </div>
           </div>
         )}
@@ -623,6 +629,16 @@ export default function Home() {
               </div>
             </form>
           </div>
+        )}
+
+        {/* Schedule Summary - moved below Smart Commands */}
+        {schedule && config && (
+          <ScheduleSummary
+            preview={preview || undefined}
+            schedule={schedule}
+            config={config}
+            currentMonth={currentMonth}
+          />
         )}
 
         {/* Changes Panel - Show when there are pending changes */}

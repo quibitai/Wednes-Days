@@ -480,10 +480,10 @@ export default function Calendar({
                   e.stopPropagation();
                   onDayDetailClick(dateStr);
                 }}
-                className="p-1 text-gray-400 dark:text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                className="p-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors shadow-sm"
                 title="View day details and notes"
               >
-                <Info className="h-4 w-4" />
+                <Info className="h-3 w-3" />
               </button>
             )}
             
@@ -622,17 +622,14 @@ export default function Calendar({
                   )}
                   
                   {/* Info button - always show for entries, aligned with unavailability */}
-                  {!isPast && (
+                  {!isPast && onDayDetailClick && (
                     <button
                       onClick={(e) => {
-                        handleInfoClick(dateStr, e);
+                        e.stopPropagation();
+                        onDayDetailClick(dateStr);
                       }}
-                      className={`p-0.5 transition-colors ${
-                        activeTooltip === dateStr 
-                          ? 'text-blue-600 dark:text-blue-400' 
-                          : 'text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400'
-                      }`}
-                      title="View day details"
+                      className="p-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors shadow-sm"
+                      title="View day details and notes"
                     >
                       <Info className="h-3 w-3" />
                     </button>
