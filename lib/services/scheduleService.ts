@@ -225,6 +225,10 @@ export class ScheduleService {
     periods: Array<{ personId: 'personA' | 'personB'; days: number }>;
     totalHandoffs: number;
     averagePeriodLength: number;
+    // Enhanced statistics
+    yearToDateSplit: { personA: number; personB: number };
+    averageBlockLength: { personA: number; personB: number };
+    monthlyHandoffs: Array<{ month: string; handoffs: number }>;
   } {
     const periods = this.algorithm.getCustodyPeriods(schedule, dayRange);
     const totalHandoffs = periods.length - 1; // Number of transitions
@@ -232,10 +236,91 @@ export class ScheduleService {
       ? periods.reduce((sum, p) => sum + p.dayCount, 0) / periods.length 
       : 0;
 
+    // Calculate year-to-date custody split
+    const currentYear = new Date().getFullYear();
+    const yearStart = `${currentYear}-01-01`;
+    const today = new Date().toISOString().split('T')[0];
+    
+    let ytdPersonA = 0;
+    let ytdPersonB = 0;
+    
+    Object.entries(schedule.entries).forEach(([date, entry]) => {
+      if (date >= yearStart && date <= today) {
+        if (entry.assignedTo === 'personA') {
+          ytdPersonA++;
+        } else if (entry.assignedTo === 'personB') {
+          ytdPersonB++;
+        }
+      }
+    });
+
+    const totalYtdDays = ytdPersonA + ytdPersonB;
+    const yearToDateSplit = {
+      personA: totalYtdDays > 0 ? Math.round((ytdPersonA / totalYtdDays) * 100) : 0,
+      personB: totalYtdDays > 0 ? Math.round((ytdPersonB / totalYtdDays) * 100) : 0,
+    };
+
+    // Calculate average block length per person
+    const personABlocks: number[] = [];
+    const personBBlocks: number[] = [];
+    
+    periods.forEach(period => {
+      if (period.personId === 'personA') {
+        personABlocks.push(period.dayCount);
+      } else {
+        personBBlocks.push(period.dayCount);
+      }
+    });
+
+    const averageBlockLength = {
+      personA: personABlocks.length > 0 
+        ? Math.round((personABlocks.reduce((sum, days) => sum + days, 0) / personABlocks.length) * 10) / 10
+        : 0,
+      personB: personBBlocks.length > 0 
+        ? Math.round((personBBlocks.reduce((sum, days) => sum + days, 0) / personBBlocks.length) * 10) / 10
+        : 0,
+    };
+
+    // Calculate monthly handoffs for the past 12 months
+    const monthlyHandoffs: Array<{ month: string; handoffs: number }> = [];
+    const now = new Date();
+    
+    for (let i = 11; i >= 0; i--) {
+      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = monthDate.toISOString().slice(0, 7); // YYYY-MM format
+      const monthName = monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      
+      // Count handoffs in this month
+      let handoffsInMonth = 0;
+      const monthStart = `${monthKey}-01`;
+      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0)
+        .toISOString().split('T')[0];
+      
+      let previousAssignment: 'personA' | 'personB' | null = null;
+      
+      Object.entries(schedule.entries)
+        .filter(([date]) => date >= monthStart && date <= monthEnd)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .forEach(([date, entry]) => {
+          if (previousAssignment && previousAssignment !== entry.assignedTo) {
+            handoffsInMonth++;
+          }
+          previousAssignment = entry.assignedTo;
+        });
+      
+      monthlyHandoffs.push({
+        month: monthName,
+        handoffs: handoffsInMonth,
+      });
+    }
+
     return {
       periods: periods.map(p => ({ personId: p.personId, days: p.dayCount })),
       totalHandoffs,
       averagePeriodLength,
+      yearToDateSplit,
+      averageBlockLength,
+      monthlyHandoffs,
     };
   }
 
