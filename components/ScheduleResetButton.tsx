@@ -3,6 +3,7 @@
 import React from 'react';
 import { RotateCcw } from 'lucide-react';
 import { StorageManager } from '@/lib/storage/storageManager';
+import { ScheduleGenerator } from '@/lib/services/scheduleGenerator';
 import type { AppConfig, CustodySchedule } from '@/types';
 
 interface ScheduleResetButtonProps {
@@ -13,6 +14,7 @@ interface ScheduleResetButtonProps {
 export default function ScheduleResetButton({ config, onReset }: ScheduleResetButtonProps) {
   const [isResetting, setIsResetting] = React.useState(false);
   const [storageManager] = React.useState(new StorageManager());
+  const [scheduleGenerator] = React.useState(new ScheduleGenerator());
 
   const resetToThreeDayRotation = async () => {
     if (!config) {
@@ -39,39 +41,15 @@ export default function ScheduleResetButton({ config, onReset }: ScheduleResetBu
         return;
       }
 
-      const otherPersonId = janeId === 'personA' ? 'personB' : 'personA';
-      console.log(`Jane is ${janeId}, other person is ${otherPersonId}`);
+      console.log(`Jane is ${janeId}, resetting schedule...`);
 
       // Calculate dates starting from yesterday
       const today = new Date();
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
 
-      // Generate schedule for next 30 days starting from yesterday
-      const entries: Record<string, any> = {};
-      let currentDate = new Date(yesterday);
-      let currentPerson = janeId; // Jane starts yesterday
-      let daysInCurrentStretch = 1; // Yesterday counts as day 1
-
-      for (let i = 0; i < 30; i++) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-
-        entries[dateStr] = {
-          date: dateStr,
-          assignedTo: currentPerson,
-          isAdjusted: false
-        };
-
-        // Switch after 3 days
-        if (daysInCurrentStretch >= 3) {
-          currentPerson = currentPerson === janeId ? otherPersonId : janeId;
-          daysInCurrentStretch = 1;
-        } else {
-          daysInCurrentStretch++;
-        }
-
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
+      // Generate a complete calendar year starting from yesterday
+      const entries = scheduleGenerator.generateFullCalendarYear(yesterday, janeId);
 
       // Create new schedule
       const newSchedule: CustodySchedule = {
@@ -91,7 +69,7 @@ export default function ScheduleResetButton({ config, onReset }: ScheduleResetBu
 
       console.log('Schedule reset successfully!');
       console.log('Schedule starts:', yesterday.toISOString().split('T')[0], 'with', config[janeId].name);
-      console.log('3-day rotation pattern applied for 30 days');
+      console.log('Full calendar year generated with 3-day rotation pattern');
 
       alert(`Schedule reset successfully! 3-day rotation starts with ${config[janeId].name} having custody yesterday.`);
       

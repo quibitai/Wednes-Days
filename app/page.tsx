@@ -203,10 +203,10 @@ export default function Home() {
       const startDate = config.startDate ? new Date(config.startDate) : new Date();
       const initialPerson = config.initialPerson || 'personA';
       
-      const newScheduleEntries = scheduleGenerator.generate3DayRotation(
+      // Generate a complete calendar year to ensure all months are fully populated
+      const newScheduleEntries = scheduleGenerator.generateFullCalendarYear(
         startDate,
-        initialPerson,
-        365
+        initialPerson
       );
       
       const newSchedule: CustodySchedule = {
