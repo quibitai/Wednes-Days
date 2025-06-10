@@ -230,7 +230,7 @@ export default function Home() {
 
   const handleNaturalLanguageInput = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nlpInput.trim() || !preview || !schedule) return;
+    if (!nlpInput.trim() || !preview) return;
 
     const originalInput = nlpInput;
     setNlpInput('');
@@ -257,37 +257,11 @@ export default function Home() {
             }
             setPreview(tempPreview); // Show the initial 'unavailable' marks
 
-            // Run the full rebalance
+            // Run the full rebalance to generate proposals
             const finalPreview = await previewManager.generateAIProposals(tempPreview);
             setPreview(finalPreview);
 
-            // Automatically commit the changes to make them permanent
-            const finalSchedule = previewManager.commitChanges(finalPreview);
-            
-            const changedEntries: Record<string, any> = {};
-            Object.keys(finalSchedule).forEach(date => {
-                if (JSON.stringify(finalSchedule[date]) !== JSON.stringify(schedule.entries[date])) {
-                    changedEntries[date] = finalSchedule[date];
-                }
-            });
-
-            if (Object.keys(changedEntries).length > 0) {
-                await storageManager.bulkUpdateScheduleWithHistory(
-                    changedEntries,
-                    'bulk_update',
-                    `AI request: "${originalInput}" - Updated ${Object.keys(changedEntries).length} days`,
-                    currentUser
-                );
-                
-                console.log(`AI request completed: Applied ${Object.keys(changedEntries).length} schedule changes`);
-            }
-            
-            // Reload the schedule and reset preview
-            const loadedSchedule = await storageManager.loadSchedule();
-            if (loadedSchedule) {
-                setSchedule(loadedSchedule);
-                initializePreview(loadedSchedule.entries);
-            }
+            console.log(`AI request processed: "${originalInput}" - Generated proposals for ${dates.length} unavailable days`);
 
         } else {
             alert(`Action understood: ${action}, but not yet implemented.`);
