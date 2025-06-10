@@ -230,7 +230,7 @@ export default function Home() {
 
   const handleNaturalLanguageInput = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nlpInput.trim() || !preview) return;
+    if (!nlpInput.trim() || !preview || !schedule) return;
 
     const originalInput = nlpInput;
     setNlpInput('');
@@ -257,15 +257,44 @@ export default function Home() {
             }
             setPreview(tempPreview); // Show the initial 'unavailable' marks
 
-            // Now run the full rebalance
+            // Run the full rebalance
             const finalPreview = await previewManager.generateAIProposals(tempPreview);
             setPreview(finalPreview);
+
+            // Automatically commit the changes to make them permanent
+            const finalSchedule = previewManager.commitChanges(finalPreview);
+            
+            const changedEntries: Record<string, any> = {};
+            Object.keys(finalSchedule).forEach(date => {
+                if (JSON.stringify(finalSchedule[date]) !== JSON.stringify(schedule.entries[date])) {
+                    changedEntries[date] = finalSchedule[date];
+                }
+            });
+
+            if (Object.keys(changedEntries).length > 0) {
+                await storageManager.bulkUpdateScheduleWithHistory(
+                    changedEntries,
+                    'bulk_update',
+                    `AI request: "${originalInput}" - Updated ${Object.keys(changedEntries).length} days`,
+                    currentUser
+                );
+                
+                console.log(`AI request completed: Applied ${Object.keys(changedEntries).length} schedule changes`);
+            }
+            
+            // Reload the schedule and reset preview
+            const loadedSchedule = await storageManager.loadSchedule();
+            if (loadedSchedule) {
+                setSchedule(loadedSchedule);
+                initializePreview(loadedSchedule.entries);
+            }
 
         } else {
             alert(`Action understood: ${action}, but not yet implemented.`);
         }
 
     } catch (error) {
+        console.error('Error processing natural language input:', error);
         alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
         setNlpInput(originalInput);
     } finally {
