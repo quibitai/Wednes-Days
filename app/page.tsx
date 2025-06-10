@@ -248,7 +248,7 @@ export default function Home() {
         const result = await response.json();
         if (!result.success) throw new Error(result.error || 'Could not parse request.');
 
-        const { action, dates, person } = result.data || {};
+        const { action, dates, person, preferences } = result.data || {};
 
         if (action === 'mark_unavailable' && dates?.length > 0) {
             let tempPreview = preview;
@@ -263,6 +263,58 @@ export default function Home() {
 
             console.log(`AI request processed: "${originalInput}" - Generated proposals for ${dates.length} unavailable days`);
 
+        } else if (action === 'reset_pattern' && preferences?.resetFromDate) {
+            setIsProcessing(true);
+            try {
+                const resetDate = new Date(preferences.resetFromDate);
+                const startingPerson = preferences.startingPerson || 'personA';
+                
+                // Generate new schedule from the reset date through end of year
+                const endOfYear = new Date(resetDate.getFullYear(), 11, 31);
+                const daysToGenerate = Math.ceil((endOfYear.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                
+                const newScheduleEntries = scheduleGenerator.generateSchedule(
+                    resetDate,
+                    3, // 3-day rotation
+                    startingPerson,
+                    daysToGenerate
+                );
+
+                // Preserve existing entries before the reset date
+                const preservedEntries: Record<string, any> = {};
+                const resetDateStr = resetDate.toISOString().split('T')[0];
+                
+                Object.keys(preview.current).forEach(date => {
+                    if (date < resetDateStr) {
+                        preservedEntries[date] = preview.current[date];
+                    }
+                });
+
+                // Combine preserved entries with new pattern
+                const updatedSchedule = {
+                    ...preview.current,
+                    ...preservedEntries,
+                    ...newScheduleEntries
+                };
+
+                // Update the storage and state
+                const newCustodySchedule: CustodySchedule = {
+                    entries: updatedSchedule,
+                    startDate: schedule?.startDate || resetDateStr,
+                    initialPerson: startingPerson,
+                    lastUpdated: new Date().toISOString()
+                };
+
+                await storageManager.saveSchedule(newCustodySchedule);
+                setSchedule(newCustodySchedule);
+                initializePreview(updatedSchedule);
+
+                console.log(`AI pattern reset processed: "${originalInput}" - Reset ${preferences.patternType || 'three day'} pattern from ${resetDateStr}`);
+
+            } catch (error) {
+                console.error('Error processing pattern reset:', error);
+                alert('Error resetting pattern. Please try again.');
+            }
         } else {
             alert(`Action understood: ${action}, but not yet implemented.`);
         }
@@ -633,7 +685,7 @@ export default function Home() {
                     type="text"
                     value={nlpInput}
                     onChange={(e) => setNlpInput(e.target.value)}
-                    placeholder="e.g., 'Mark me unavailable July 15-17' or 'Give Adam custody on July 20'"
+                    placeholder="e.g., 'Mark me unavailable July 15-17', 'Reset three day pattern from July 2nd'"
                     className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
                     disabled={isProcessing}
                   />

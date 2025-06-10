@@ -177,18 +177,33 @@ When parsing dates:
 - If they mention a month that has passed this year, assume next year
 - Always return dates in YYYY-MM-DD format
 
+When parsing person names:
+- "Adam" = "personA"
+- "Jane" = "personB"
+- If user mentions who should start (e.g., "Adam hands off to Jane"), the receiving person starts
+
 Return ONLY valid JSON in this format:
 {
-  "action": "mark_unavailable" | "request_swap" | "optimize_schedule" | "explain_schedule",
+  "action": "mark_unavailable" | "request_swap" | "optimize_schedule" | "explain_schedule" | "reset_pattern",
   "dates": ["YYYY-MM-DD"],
   "reason": "brief reason",
   "preferences": {
     "minPeriodLength": number,
     "maxHandoffs": number,
-    "preferWeekends": boolean
+    "preferWeekends": boolean,
+    "startingPerson": "personA" | "personB" | null,
+    "patternType": "three_day" | null,
+    "resetFromDate": "YYYY-MM-DD" | null
   },
   "confidence": 0.0-1.0
-}`
+}
+
+For "reset_pattern" actions:
+- Use when user wants to reset/regenerate the entire pattern from a specific date
+- Set "resetFromDate" to the date they want to start the new pattern
+- Set "startingPerson" to who should have custody on that date (if specified)
+- For handoff language like "Adam hands off to Jane on July 2nd", Jane (personB) gets custody starting that date
+- Examples: "reset three day pattern starting July 2nd", "Adam hands off to Jane on July 2nd through rest of year"`
       },
       {
         role: 'user',
